@@ -1,3 +1,6 @@
 [submodule "src/T80"]
 	path = src/T80
 	url = https://github.com/mist-devel/T80.git
+[submodule "src/board/mist/mist-modules"]
+	path = src/board/mist/mist-modules
+	url = https://github.com/mist-devel/mist-modules.git

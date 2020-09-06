@@ -291,14 +291,9 @@ set_global_assignment -name VHDL_FILE ps2kbd_pkg.vhd
 set_global_assignment -name VHDL_FILE keyboard.vhd
 set_global_assignment -name VHDL_FILE spram.vhd
 set_global_assignment -name VHDL_FILE sprom.vhd
-set_global_assignment -name VERILOG_FILE user_io.v
-set_global_assignment -name VERILOG_FILE osd.v
-set_global_assignment -name VERILOG_FILE data_io.v
-set_global_assignment -name VERILOG_FILE scandoubler.v
-set_global_assignment -name SYSTEMVERILOG_FILE rgb2ypbpr.sv
 set_global_assignment -name SYSTEMVERILOG_FILE sdram.sv
 set_global_assignment -name SDC_FILE coleco.sdc
-set_global_assignment -name VERILOG_FILE ../../board/mist/data_io_ram.v
+set_global_assignment -name QIP_FILE "mist-modules/mist.qip"
 set_global_assignment -name VHDL_FILE ../../board/misc/dpram.vhd
 set_global_assignment -name QIP_FILE ../../T80/T80.qip
 set_global_assignment -name QIP_FILE ../../sn76489/sn76489.qip
@@ -329,7 +324,6 @@ set_global_assignment -name VHDL_FILE ../../board/snespad/snespad_pad.vhd
 set_global_assignment -name VHDL_FILE ../../board/snespad/snespad_ctrl.vhd
 set_global_assignment -name VHDL_FILE "../../board/snespad/snespad_comp-pack.vhd"
 set_global_assignment -name VHDL_FILE ../../board/snespad/snespad.vhd
-set_global_assignment -name VHDL_FILE ../../board/misc/dac.vhd
 set_global_assignment -name VHDL_FILE "../../board/misc/board_misc_comp_pack-p.vhd"
 set_global_assignment -name VHDL_FILE "../../cv_keys_pack-p.vhd"
 set_global_assignment -name VHDL_FILE "../../cv_console_comp_pack-p.vhd"
