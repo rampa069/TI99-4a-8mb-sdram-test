@@ -274,7 +274,7 @@ set_global_assignment -name EDA_SIMULATION_TOOL "<None>"
 
 set_global_assignment -name ORIGINAL_QUARTUS_VERSION "5.0 SP1"
 set_global_assignment -name PROJECT_CREATION_TIME_DATE "22:10:17  JANUARY 03, 2006"
-set_global_assignment -name LAST_QUARTUS_VERSION 13.1
+set_global_assignment -name LAST_QUARTUS_VERSION "13.1 SP4.26"
 
 set_global_assignment -name POWER_PRESET_COOLING_SOLUTION "23 MM HEAT SINK WITH 200 LFPM AIRFLOW"
 set_global_assignment -name POWER_BOARD_THERMAL_MODEL "NONE (CONSERVATIVE)"
@@ -282,6 +282,10 @@ set_global_assignment -name TIMEQUEST_MULTICORNER_ANALYSIS ON
 set_global_assignment -name SMART_RECOMPILE ON
 set_global_assignment -name ENABLE_SIGNALTAP OFF
 set_global_assignment -name USE_SIGNALTAP_FILE ../../../syn/mist/kbd.stp
+set_instance_assignment -name CURRENT_STRENGTH_NEW 8MA -to VGA_VS
+set_instance_assignment -name CURRENT_STRENGTH_NEW 8MA -to VGA_HS
+set_instance_assignment -name CURRENT_STRENGTH_NEW 4MA -to UART_TX
+set_instance_assignment -name FAST_INPUT_REGISTER ON -to UART_RX
 set_global_assignment -name VHDL_FILE ps2kbd.vhd
 set_global_assignment -name VHDL_FILE ps2kbd_pkg.vhd
 set_global_assignment -name VHDL_FILE keyboard.vhd
@@ -297,14 +301,8 @@ set_global_assignment -name SDC_FILE coleco.sdc
 set_global_assignment -name VERILOG_FILE ../../board/mist/data_io_ram.v
 set_global_assignment -name VHDL_FILE ../../board/misc/dpram.vhd
 set_global_assignment -name QIP_FILE ../../T80/T80.qip
+set_global_assignment -name QIP_FILE ../../sn76489/sn76489.qip
 set_global_assignment -name SYSTEMVERILOG_FILE ../../YM2149.sv
-set_global_assignment -name VHDL_FILE "../../sn76489/sn76489_comp_pack-p.vhd"
-set_global_assignment -name VHDL_FILE ../../sn76489/sn76489_clock_div.vhd
-set_global_assignment -name VHDL_FILE ../../sn76489/sn76489_latch_ctrl.vhd
-set_global_assignment -name VHDL_FILE ../../sn76489/sn76489_noise.vhd
-set_global_assignment -name VHDL_FILE ../../sn76489/sn76489_tone.vhd
-set_global_assignment -name VHDL_FILE ../../sn76489/sn76489_attenuator.vhd
-set_global_assignment -name VHDL_FILE ../../sn76489/sn76489_top.vhd
 set_global_assignment -name VHDL_FILE "../../vdp18/vdp18_pack-p.vhd"
 set_global_assignment -name VHDL_FILE ../../vdp18/vdp18_pattern.vhd
 set_global_assignment -name VHDL_FILE ../../vdp18/vdp18_sprite.vhd
@@ -340,8 +338,4 @@ set_global_assignment -name QIP_FILE ../../board/mist/mist_pll.qip
 set_global_assignment -name SIGNALTAP_FILE ../../../syn/mist/rom.stp
 set_global_assignment -name SIGNALTAP_FILE ../../../syn/mist/vdp.stp
 set_global_assignment -name SIGNALTAP_FILE ../../../syn/mist/kbd.stp
-set_instance_assignment -name CURRENT_STRENGTH_NEW 8MA -to VGA_VS
-set_instance_assignment -name CURRENT_STRENGTH_NEW 8MA -to VGA_HS
-set_instance_assignment -name CURRENT_STRENGTH_NEW 4MA -to UART_TX
-set_instance_assignment -name FAST_INPUT_REGISTER ON -to UART_RX
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top

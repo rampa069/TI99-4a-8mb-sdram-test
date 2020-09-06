@@ -137,7 +137,7 @@ use work.cv_comp_pack.cv_ctrl;
 use work.cv_comp_pack.cv_addr_dec;
 use work.cv_comp_pack.cv_bus_mux;
 use work.vdp18_core_comp_pack.vdp18_core;
-use work.sn76489_comp_pack.sn76489_top;
+use work.sn76489_top;
 
 architecture struct of cv_console is
 
@@ -221,7 +221,7 @@ architecture struct of cv_console is
 
   -- SN76489 signal
   signal psg_ready_s      : std_logic;
-  signal psg_audio_s      : signed( 7 downto 0);
+  signal psg_audio_s      : std_logic_vector( 7 downto 0);
 
   -- AY-8910 signal
   signal ay_d_s           : std_logic_vector( 7 downto 0);
@@ -267,7 +267,7 @@ architecture struct of cv_console is
 begin
 
   vdd_s <= '1';
-  audio_o <= ("0" & unsigned(psg_audio_s+128) & "00") + unsigned(ay_ch_a_s) + unsigned(ay_ch_b_s) + unsigned(ay_ch_c_s);
+  audio_o <= ("0" & unsigned(psg_audio_s) & "00") + unsigned(ay_ch_a_s) + unsigned(ay_ch_b_s) + unsigned(ay_ch_c_s);
 
   int_n_s <= ctrl_int_n_s when sg1000 = '0' else vdp_int_n_s;
   nmi_n_s <= vdp_int_n_s when sg1000 = '0' else joy0_i(7) and joy1_i(7);
