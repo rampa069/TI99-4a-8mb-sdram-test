@@ -318,7 +318,7 @@ begin
       locked => pll_locked
       );
       
-  SDRAM_CLK <= not clk_mem_s;
+  SDRAM_CLK <= clk_mem_s;
 
   UART_TX <= '1';
   uart: process (clk_21m3_s)
