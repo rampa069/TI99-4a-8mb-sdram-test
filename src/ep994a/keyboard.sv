@@ -19,12 +19,6 @@ always @(posedge clk_sys) begin
 	
 	if(key_strobe) begin
 		casex(key_code)
-			'hX75: btn_up    <= pressed;
-			'hX72: btn_down  <= pressed;
-			'hX6B: btn_left  <= pressed;
-			'hX74: btn_right <= pressed;
-			'hX0E: btn_fire  <= pressed; // ` => fire
-			
 			'hX16: btn_1     <= pressed; // 1
 			'hX1E: btn_2     <= pressed; // 2
 			'hX26: btn_3     <= pressed; // 3
@@ -80,6 +74,36 @@ always @(posedge clk_sys) begin
 			'hX29: btn_sp    <= pressed; // space
 			'hX11: btn_fn    <= pressed; // lalt => fn
 			//'hX14: btn_fn    <= pressed; // rctrl => fn
+
+			'hX75: begin // up
+				btn_fn <= pressed;
+				btn_e <= pressed;
+			end
+			'hX6b: begin // left
+				btn_fn <= pressed;
+				btn_s <= pressed;
+			end
+			'hX72: begin // down
+				btn_fn <= pressed;
+				btn_x <= pressed;
+			end
+			'hX74: begin // right
+				btn_fn <= pressed;
+				btn_d <= pressed;
+			end
+			'hX71: begin // del
+				btn_fn <= pressed;
+				btn_1 <= pressed;
+			end
+			'hX70: begin // ins
+				btn_fn <= pressed;
+				btn_2 <= pressed;
+			end
+			'hX76: begin // esc (back)
+				btn_fn <= pressed;
+				btn_9 <= pressed;
+			end
+
 		endcase
 	end
 end
@@ -136,22 +160,16 @@ reg btn_ct = 0;
 reg btn_sp = 0;
 reg btn_fn = 0;
 
-reg btn_up    = 0;
-reg btn_down  = 0;
-reg btn_left  = 0;
-reg btn_right = 0;
-reg btn_fire  = 0;
-
 wire m_right2  = joy_swap ? joy0[0] : joy1[0];
 wire m_left2   = joy_swap ? joy0[1] : joy1[1];
 wire m_down2   = joy_swap ? joy0[2] : joy1[2];
 wire m_up2     = joy_swap ? joy0[3] : joy1[3];
 wire m_fire2   = joy_swap ? joy0[4] | joy1[5] : joy1[4] | joy0[5]; // Fire 2 = fire button on second controller joy[5]
-wire m_right  = btn_right | (joy_swap ? joy1[0] : joy0[0]);
-wire m_left   = btn_left  | (joy_swap ? joy1[1] : joy0[1]);
-wire m_down   = btn_down  | (joy_swap ? joy1[2] : joy0[2]);
-wire m_up     = btn_up    | (joy_swap ? joy1[3] : joy0[3]);
-wire m_fire   = btn_fire  | (joy_swap ? joy1[4] | joy0[5] : joy0[4] | joy1[5]);
+wire m_right  = (joy_swap ? joy1[0] : joy0[0]);
+wire m_left   = (joy_swap ? joy1[1] : joy0[1]);
+wire m_down   = (joy_swap ? joy1[2] : joy0[2]);
+wire m_up     = (joy_swap ? joy1[3] : joy0[3]);
+wire m_fire   = (joy_swap ? joy1[4] | joy0[5] : joy0[4] | joy1[5]);
 //wire m_arm    = btn_arm   | joy0[5];
 //wire m_1      = btn_1     | joy0[9];
 //wire m_2      = btn_2     | joy0[10];
