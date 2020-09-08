@@ -64,6 +64,7 @@ end mist_ti994a;
 architecture rtl of mist_ti994a is
 
   constant CONF_STR : string := "TI994A;;"&
+                                "F,C  D  G  ,Load;"&
                                 "F,BIN,Load Full or C.bin;"&
                                 "F,BIN,Load D.bin;"&
                                 "F,BIN,Load G.bin;"&
@@ -213,7 +214,8 @@ architecture rtl of mist_ti994a is
 
   signal kbd_i_s             : std_logic_vector( 8 downto 0);
   signal kbd_o_s             : std_logic_vector( 7 downto 0);
-  
+
+  signal rommask_s          : std_logic_vector(6 downto 1);
   signal romwr_a            : std_logic_vector(24 downto 0);
   signal ioctl_dout         : std_logic_vector(7 downto 0);
   signal rom_wr             : std_logic;
@@ -335,6 +337,7 @@ begin
       sr_addr_o       => speech_rom_a_s,
       sr_data_i       => speech_rom_d_s,
 
+      rommask_i       => rommask_s,
       scratch_1k_i    => status(14),
       mbx_i           => status(13),
       flashloading_i  => downl,
@@ -500,12 +503,21 @@ begin
         ready       => ram_ready
   );
 
+  -- apply some mask when .D was loaded last
+  rommask_s <= "111111" when index /= x"03" and index = x"81" else
+               "000001" when romwr_a(24 downto 14) = "00000000000" else
+               "000011" when romwr_a(24 downto 15) = "0000000000" else
+               "000111" when romwr_a(24 downto 16) = "000000000" else
+               "001111" when romwr_a(24 downto 17) = "00000000" else
+               "011111" when romwr_a(24 downto 18) = "0000000" else
+               "111111";
+
   cpu_ram_d_to_ti_s <= sdram_dout;
   sdram_addr <= "00000" & cpu_ram_a_s & '0' when downl = '0' else
-                romwr_a when index = x"01" else
-                std_logic_vector(unsigned(romwr_a) + x"2000")  when index = x"02" else
-                std_logic_vector(unsigned(romwr_a) + x"86000") when index = x"03" else 
-                std_logic_vector(unsigned(romwr_a) + x"80000");
+                romwr_a when index = x"02" or index = x"01" else -- .c
+                std_logic_vector(unsigned(romwr_a) + x"2000")  when index = x"03" or index = x"41" else -- .d
+                std_logic_vector(unsigned(romwr_a) + x"86000") when index = x"04" or index = x"81" else -- .g
+                std_logic_vector(unsigned(romwr_a) + x"80000"); -- .rom
 
   sdram_we <= not (cpu_ram_ce_n_s or cpu_ram_we_n_s) when downl = '0' else rom_wr;
   sdram_rd <= not (cpu_ram_ce_n_s or not cpu_ram_we_n_s) when downl = '0' else '0';

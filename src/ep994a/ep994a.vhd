@@ -111,6 +111,7 @@ entity ep994a is
     sr_addr_o        : out std_logic_vector(14 downto 0);
     sr_data_i        : in  std_logic_vector( 7 downto 0);
 
+    rommask_i        : in std_logic_vector(6 downto 1) := "111111";
     scratch_1k_i     : in std_logic;
     mbx_i            : in std_logic;
     flashloading_i   : in std_logic;
@@ -560,7 +561,7 @@ begin
 						sram_addr_bus <= x"8" & grom_ram_addr(15 downto 1);	-- 0x80000 GROM
 					elsif cartridge_cs='1' and sams_regs(5)='0' then
 						-- Handle paging of module port at 0x6000 unless sams_regs(5) is set (1E0A)
-						sram_addr_bus <= '0' & basic_rom_bank & cpu_addr(12 downto 1);	-- mapped to 0x00000..0x7FFFF
+						sram_addr_bus <= '0' & (basic_rom_bank and rommask_i) & cpu_addr(12 downto 1);	-- mapped to 0x00000..0x7FFFF
 					elsif cru1100='1' and cpu_addr(15 downto 13) = "010" then	
 						-- DSR's for disk system
 						sram_addr_bus <= x"B" & "000" & cpu_addr(12 downto 1);	-- mapped to 0xB0000
