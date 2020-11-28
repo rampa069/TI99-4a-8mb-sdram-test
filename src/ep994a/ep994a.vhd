@@ -820,7 +820,7 @@ begin
 							vdp_wr <= '1';
 						elsif cpu_addr(15 downto 8) = x"9C" then
 							grom_we <= '1';			-- GROM writes
-						elsif cartridge_cs='1' and sams_regs(5)='0' then
+						elsif cartridge_cs='1' and sams_regs(5)='0' and mbx_i = '0' then
 							basic_rom_bank <= cpu_addr(6 downto 1);	-- capture ROM bank select
 						elsif cpu_addr(15 downto 8) = x"84" then	
 							tms9919_we <= '1';		-- Audio chip write

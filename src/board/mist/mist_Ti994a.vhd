@@ -504,7 +504,7 @@ begin
   );
 
   -- apply some mask when .D was loaded last
-  rommask_s <= "111111" when index /= x"03" and index = x"81" else
+  rommask_s <= "111111" when index /= x"03" and index /= x"41" else -- not .D
                "000001" when romwr_a(24 downto 14) = "00000000000" else
                "000011" when romwr_a(24 downto 15) = "0000000000" else
                "000111" when romwr_a(24 downto 16) = "000000000" else
