@@ -68,6 +68,8 @@ architecture rtl of mist_ti994a is
                                 "F,BIN,Load Full or C.bin;"&
                                 "F,BIN,Load D.bin;"&
                                 "F,BIN,Load G.bin;"&
+                                "S0,DSK,Drive 1;"&
+                                "S1,DSK,Drive 2;"&
                                 "OD,Cart Type,Normal,MBX;"&
                                 "OE,Scratchpad RAM,256B,1KB;"&
                                 "OA,Turbo,Off,On;"&
@@ -175,6 +177,20 @@ architecture rtl of mist_ti994a is
   signal joya       : std_logic_vector(7 downto 0);
   signal joyb       : std_logic_vector(7 downto 0);
 
+  -- sd io
+  signal sd_lba         : std_logic_vector(31 downto 0);
+  signal sd_rd          : std_logic_vector(1 downto 0) := "00";
+  signal sd_wr          : std_logic_vector(1 downto 0) := "00";
+  signal sd_ack         : std_logic;
+  signal sd_conf        : std_logic;
+  signal sd_sdhc        : std_logic;
+  signal sd_din         : std_logic_vector(7 downto 0);
+  signal sd_dout        : std_logic_vector(7 downto 0);
+  signal sd_dout_strobe : std_logic;
+  signal sd_buff_addr   : std_logic_vector(8 downto 0);
+  signal img_mounted    : std_logic_vector(1 downto 0);
+  signal img_size       : std_logic_vector(31 downto 0);
+
   signal red        : std_logic_vector(7 downto 0);
   signal green      : std_logic_vector(7 downto 0);
   signal blue       : std_logic_vector(7 downto 0);
@@ -186,7 +202,6 @@ architecture rtl of mist_ti994a is
   signal old_downl      : std_logic;
   
   signal clk_cnt_q            : unsigned(1 downto 0);
-	signal clk_en_5m37_q			  : std_logic;
 	signal clk_21m3_s					  : std_logic;
   signal clk_sys_s      : std_logic;
   signal clk_mem_cnt    : unsigned(2 downto 0);
@@ -266,7 +281,6 @@ begin
     if reset_n_s = '0' then
       clk_cnt_q     <= (others => '0');
       clk_en_10m7_q <= '0';
-      clk_en_5m37_q <= '0';
 
     elsif clk_sys_s'event and clk_sys_s = '1' then
       -- Clock counter --------------------------------------------------------
@@ -282,14 +296,6 @@ begin
           clk_en_10m7_q <= '1';
         when others =>
           clk_en_10m7_q <= '0';
-      end case;
-
-      -- 5.37 MHz clock enable ------------------------------------------------
-      case clk_cnt_q is
-        when "01" | "11" =>
-          clk_en_5m37_q <= '1';
-        when others =>
-          clk_en_5m37_q <= '0';
       end case;
 
     end if;
@@ -336,6 +342,18 @@ begin
       sr_re_o         => open,
       sr_addr_o       => speech_rom_a_s,
       sr_data_i       => speech_rom_d_s,
+
+      sd_lba          => sd_lba,
+      sd_rd           => sd_rd,
+      sd_wr           => sd_wr,
+      sd_ack          => sd_ack,
+      sd_dout         => sd_dout,
+      sd_dout_strobe  => sd_dout_strobe,
+      sd_din          => sd_din,
+      sd_buff_addr    => sd_buff_addr,
+      img_mounted     => img_mounted,
+      img_size        => img_size,
+      img_wp          => "00",
 
       rommask_i       => rommask_s,
       scratch_1k_i    => status(14),
@@ -438,13 +456,16 @@ begin
     ); 
     
 -- MiST interfaces
-  
+
+  sd_sdhc <= '1';
+  sd_conf <= '0';
+
   user_io_d : user_io
     generic map (STRLEN => CONF_STR'length)
     
     port map ( 
       clk_sys => clk_sys_s,
-      clk_sd => '0',
+      clk_sd => clk_sys_s,
       SPI_CLK => SPI_SCK,
       SPI_SS_IO => CONF_DATA0,    
       SPI_MISO => SPI_DO,    
@@ -462,7 +483,20 @@ begin
       BUTTONS => buttons,
       key_strobe => key_strobe,
       key_pressed => key_pressed,
-      key_code => key_code
+      key_code => key_code,
+
+      sd_lba  => sd_lba,
+      sd_rd   => sd_rd,
+      sd_wr   => sd_wr,
+      sd_ack  => sd_ack,
+      sd_sdhc => sd_sdhc,
+      sd_conf => sd_conf,
+      sd_dout => sd_dout,
+      sd_dout_strobe => sd_dout_strobe,
+      sd_din => sd_din,
+      sd_buff_addr => sd_buff_addr,
+      img_mounted => img_mounted,
+      img_size => img_size
     );
 
   data_io_inst: data_io

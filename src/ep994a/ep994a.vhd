@@ -96,6 +96,20 @@ entity ep994a is
     hblank_o        : out std_logic;
     vblank_o        : out std_logic;
     comp_sync_n_o   : out std_logic;
+    -- Disk interface
+    img_mounted     : in  std_logic_vector( 1 downto 0);
+    img_wp          : in  std_logic_vector( 1 downto 0);
+    img_size        : in  std_logic_vector(31 downto 0); -- in bytes
+
+    sd_lba          : out std_logic_vector(31 downto 0);
+    sd_rd           : out std_logic_vector( 1 downto 0);
+    sd_wr           : out std_logic_vector( 1 downto 0);
+    sd_ack          : in  std_logic;
+    sd_buff_addr    : in  std_logic_vector( 8 downto 0);
+    sd_dout         : in  std_logic_vector( 7 downto 0);
+    sd_din          : out std_logic_vector( 7 downto 0);
+    sd_dout_strobe  : in  std_logic;
+
     -- Audio Interface --------------------------------------------------------
     audio_total_o   : out std_logic_vector(10 downto 0);
     -- DEBUG (PS2 KBD port)
@@ -125,6 +139,46 @@ use std.textio.all;
 -- pragma translate_on
 
 architecture Behavioral of ep994a is
+
+	component fdc1772 is
+		generic (
+			CLK              : integer := 42660000;
+			CLK_EN           : integer := 2031;
+			SECTOR_SIZE_CODE : integer := 1  -- 256 bytes/sector
+		);
+		port (
+			clkcpu           : in  std_logic;
+			clk8m_en         : in  std_logic;
+			fd1771           : in  std_logic;
+
+			floppy_drive     : in  std_logic_vector( 3 downto 0);
+			floppy_side      : in  std_logic;
+			floppy_reset     : in  std_logic;
+
+			irq              : out std_logic;
+			drq              : out std_logic;
+
+			cpu_addr         : in  std_logic_vector( 1 downto 0);
+			cpu_sel          : in  std_logic;
+			cpu_rw           : in  std_logic;
+			cpu_din          : in  std_logic_vector( 7 downto 0);
+			cpu_dout         : out std_logic_vector( 7 downto 0);
+
+			img_mounted      : in  std_logic_vector( 1 downto 0);
+			img_wp           : in  std_logic_vector( 1 downto 0);
+			img_ds           : in  std_logic;
+			img_size         : in  std_logic_vector(31 downto 0); -- in bytes
+
+			sd_lba           : out std_logic_vector(31 downto 0);
+			sd_rd            : out std_logic_vector( 1 downto 0);
+			sd_wr            : out std_logic_vector( 1 downto 0);
+			sd_ack           : in  std_logic;
+			sd_buff_addr     : in  std_logic_vector( 8 downto 0);
+			sd_dout          : in  std_logic_vector( 7 downto 0);
+			sd_din           : out std_logic_vector( 7 downto 0);
+			sd_dout_strobe   : in  std_logic
+		);
+	end component ;
 
 	--signal optSWI	 		: std_logic_vector(7 downto 0) := b"11111111";
 	signal optSWI	 		: std_logic_vector(7 downto 0) := b"01111111";
@@ -222,7 +276,30 @@ architecture Behavioral of ep994a is
 	signal audio_o      : std_logic_vector( 7 downto 0);
 
 	-- disk subsystem
-	signal cru1100			: std_logic;		-- disk controller CRU select
+	signal cru1100_regs  : std_logic_vector(7 downto 0); -- disk controller CRU select
+	alias disk_page_ena  : std_logic is cru1100_regs(0);
+	alias disk_motor_clk : std_logic is cru1100_regs(1);
+	alias disk_wait_en   : std_logic is cru1100_regs(2);
+	alias disk_hlt       : std_logic is cru1100_regs(3);
+	alias disk_sel       : std_logic_vector(2 downto 0) is cru1100_regs(6 downto 4);
+	alias disk_side      : std_logic is cru1100_regs(7);
+	signal disk_ds       : std_logic;
+	signal disk_motor_clk_d : std_logic;
+	signal disk_motor    : std_logic;
+	signal disk_motor_cnt: integer;
+	signal disk_clk_en   : std_logic;
+	signal disk_clk_cnt  : unsigned(4 downto 0);
+	signal disk_cs       : std_logic;
+	signal disk_rw       : std_logic;
+	signal disk_rd       : std_logic;
+	signal disk_wr       : std_logic;
+	signal disk_rdy      : std_logic;
+	signal disk_proceed  : std_logic;
+	signal disk_irq      : std_logic;
+	signal disk_drq      : std_logic;
+	signal disk_atn      : std_logic;
+	signal disk_din      : std_logic_vector(7 downto 0);
+	signal disk_dout     : std_logic_vector(7 downto 0);
 
 	-- Speech signals
 	signal speech_data_out	: std_logic_vector(7 downto 0);
@@ -354,7 +431,6 @@ begin
 		clk_en_3m58_p_o => clk_en_3m58_s
 	);
 
-	--clk_en_cpu_s  <= clk_en_3m58_s and psg_ready_s and not m1_wait_q;
 	clk <= clk_i;
 
 	-------------------------------------
@@ -483,7 +559,7 @@ begin
 				mem_read_ack <= '0';
 				mem_write_ack <= '0';
 				cru9901 <= x"00000000";
-				cru1100 <= '0';
+				cru1100_regs <= (others => '0');
 				sams_regs <= (others => '0');
 				
 				conl_app_n  <= '1';
@@ -562,7 +638,7 @@ begin
 					elsif cartridge_cs='1' and sams_regs(5)='0' then
 						-- Handle paging of module port at 0x6000 unless sams_regs(5) is set (1E0A)
 						sram_addr_bus <= '0' & (basic_rom_bank and rommask_i) & cpu_addr(12 downto 1);	-- mapped to 0x00000..0x7FFFF
-					elsif cru1100='1' and cpu_addr(15 downto 13) = "010" then	
+					elsif disk_page_ena='1' and cpu_addr(15 downto 13) = "010" then	
 						-- DSR's for disk system
 						sram_addr_bus <= x"B" & "000" & cpu_addr(12 downto 1);	-- mapped to 0xB0000
 					elsif cpu_addr(15 downto 13) = "000" and sams_regs(4) = '0' then
@@ -852,8 +928,8 @@ begin
 				end if;
 
 				-- CRU write cycle to disk control system
-				if MEM_n='1' and cpu_addr(15 downto 1)= x"110" & "000" and go_cruclk = '1' then
-					cru1100 <= cpu_cruout;
+				if MEM_n='1' and cpu_addr(15 downto 4)= x"110" and go_cruclk = '1' then
+					cru1100_regs(to_integer(unsigned(cpu_addr(3 downto 1)))) <= cpu_cruout;
 				end if;
 				-- SAMS register writes. 
 				if MEM_n='1' and cpu_addr(15 downto 4) = x"1E0" and go_cruclk = '1' then
@@ -884,6 +960,7 @@ begin
 						when 5 => cru_read_bit <= epGPIO_i(5);
 						when 6 => cru_read_bit <= epGPIO_i(6);
 						when 7 => cru_read_bit <= epGPIO_i(7);
+						when others => null;
 					end case;
 
 				elsif cpu_addr(15 downto 1) & '0' = x"0004" then
@@ -893,8 +970,18 @@ begin
 				elsif cpu_addr(15 downto 5) = "00000000001" then
 					-- TMS9901 bits 16..31, addresses 20..3E
 					cru_read_bit <= cru9901(to_integer(unsigned('1' & cpu_addr(4 downto 1))));
-				elsif cpu_addr(15 downto 1) & '0' = x"1100" then
-					cru_read_bit <= cru1100;
+				elsif cpu_addr(15 downto 4) = x"110" then
+					case to_integer(unsigned(cpu_addr(3 downto 1))) is
+						when 0 => cru_read_bit <= disk_hlt; -- HLD
+						when 1 => cru_read_bit <= cru1100_regs(4) and disk_motor; -- DS1
+						when 2 => cru_read_bit <= cru1100_regs(5) and disk_motor; -- DS2
+						when 3 => cru_read_bit <= cru1100_regs(6) and disk_motor; -- DS3
+						when 4 => cru_read_bit <= not disk_motor;
+						when 5 => cru_read_bit <= '0';
+						when 6 => cru_read_bit <= '1';
+						when 7 => cru_read_bit <= disk_side;
+						when others => null;
+					end case;
 				elsif cpu_addr(15 downto 4) = x"1E0" then
 					cru_read_bit <= sams_regs(to_integer(unsigned(cpu_addr(3 downto 1))));
 				end if;
@@ -931,6 +1018,7 @@ begin
 		x"FFF0"								when MEM_n='1' else -- other CRU
 		-- line below commented, paged memory repeated in the address range as opposed to returning zeros outside valid range
 		--	x"0000"							when translated_addr(15 downto 6) /= "0000000000" else -- paged memory limited to 256K for now
+		not disk_dout&not disk_dout when disk_cs = '1' else
 		sram_16bit_read_bus(15 downto 0);		-- data to CPU
 
 	-----------------------------------------------------------------------------
@@ -1081,5 +1169,101 @@ begin
 
 	speech_conv <= unsigned(resize(speech_o,speech_conv'length)) + to_unsigned(128,11) when speech_i = '1' else to_unsigned(0,speech_conv'length);
 	audio_total_o <= std_logic_vector(unsigned("0" & audio_o & "00") + speech_conv);
+
+	-----------------------------------------------------------------------------
+	-- Disk subsystem (PHP1240)
+	-----------------------------------------------------------------------------
+	disk_ds <= '1' when unsigned(img_size(19 downto 8)) > 360 else '0';
+	disk_cs <= '1' when disk_page_ena = '1' and cpu_addr(15 downto 4) = x"5FF" and (disk_rd = '1' or disk_wr = '1') else '0';
+	disk_rd <= not cpu_addr(3) and cpu_rd;
+	disk_wr <= cpu_addr(3) and cpu_wr;
+	disk_rw <= not disk_wr;
+	disk_din <= not data_from_cpu(15 downto 8);
+
+	fdc : fdc1772
+	port map
+	(
+		clkcpu  => clk,
+		clk8m_en => disk_clk_en,
+		fd1771 => '1',
+
+		floppy_drive => "11"&not disk_sel(1 downto 0),
+		floppy_side => not disk_side,
+		floppy_reset => reset_n_s,
+
+		irq => disk_irq,
+		drq => disk_drq,
+
+		cpu_addr => cpu_addr(2 downto 1),
+		cpu_sel => disk_cs,
+		cpu_rw => disk_rw,
+		cpu_din => disk_din,
+		cpu_dout => disk_dout,
+
+		-- The following signals are all passed in from the Top module
+		img_mounted => img_mounted,
+		img_wp => img_wp,
+		img_size => img_size,
+		img_ds => disk_ds,
+
+		sd_lba => sd_lba,
+		sd_rd => sd_rd,
+		sd_wr => sd_wr,
+		sd_ack => sd_ack,
+		sd_buff_addr => sd_buff_addr,
+		sd_dout => sd_dout,
+		sd_din => sd_din,
+		sd_dout_strobe => sd_dout_strobe
+	);
+
+	process(clk, reset_n_s)
+	begin
+		if reset_n_s = '0' then
+			disk_clk_en <= '0';
+		elsif rising_edge(clk) then
+			disk_clk_cnt <= disk_clk_cnt + 1;
+			disk_clk_en <= '0';
+			if disk_clk_cnt = 20 then
+				disk_clk_en <= '1';
+				disk_clk_cnt <= (others => '0');
+			end if;
+		end if;
+	end process;
+
+	-- LS123 monostable, 4.5 sec pulse
+	process(clk, reset_n_s)
+	begin
+		if reset_n_s = '0' then
+			disk_motor <= '0';
+			disk_motor_cnt <= 0;
+		elsif rising_edge(clk) then
+			disk_motor_clk_d <= disk_motor_clk;
+			if disk_motor_clk_d = '0' and disk_motor_clk = '1' then
+				disk_motor <= '1';
+				disk_motor_cnt <= 191970000;
+			elsif disk_motor_cnt /= 0 then
+				disk_motor_cnt <= disk_motor_cnt - 1;
+			else
+				disk_motor <= '0';
+			end if;
+		end if;
+	end process;
+
+	cpu_ready <= disk_rdy;
+	disk_rdy <= '1' when disk_wait_en = '0' or disk_proceed = '1' or disk_cs = '0' else '0';
+	-- disk wait generation
+	process(clk, reset_n_s)
+	begin
+		if reset_n_s = '0' then
+			disk_proceed <= '0';
+		elsif rising_edge(clk) then
+			disk_atn <= disk_irq or disk_drq;
+			if disk_cs = '0' then
+				disk_proceed <= '0';
+			elsif disk_atn = '0' and (disk_irq or disk_drq) = '1' then
+				disk_proceed <= '1';
+			end if;
+		end if;
+	end process;
 
 end Behavioral;
