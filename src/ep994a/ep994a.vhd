@@ -265,6 +265,7 @@ architecture Behavioral of ep994a is
 	-- Module port banking
 	signal basic_rom_bank : std_logic_vector(6 downto 1) := "000000";	-- latch ROM selection, 512K ROM support
 	signal cartridge_cs	 : std_logic;	-- 0x6000..0x7FFF
+	signal mbx_rom_bank : std_logic_vector(1 downto 0);
 
 	-- audio subsystem
 	signal dac_data		: std_logic_vector(7 downto 0);	-- data from TMS9919 to DAC input
@@ -543,6 +544,7 @@ begin
 			if optSWI(0) = '1' then 
 				if flashLoading='1' then
 					basic_rom_bank <= (others => '0');
+					mbx_rom_bank <= (others => '0');
 					sams_regs <= x"00";
 				end if;
 			end if;
@@ -635,7 +637,13 @@ begin
 				if cpu_access = '1' then
 					if cpu_addr(15 downto 8) = x"98" and cpu_addr(1)='0' then
 						sram_addr_bus <= x"8" & grom_ram_addr(15 downto 1);	-- 0x80000 GROM
-					elsif cartridge_cs='1' and sams_regs(5)='0' then
+					elsif cartridge_cs = '1' and mbx_i = '1' and cpu_addr(12 downto 10) = "011" then
+						-- MBX 6c00-6FFF - RAM
+						sram_addr_bus <= "0000010" & cpu_addr(12 downto 1);
+					elsif cartridge_cs = '1' and mbx_i = '1' and cpu_addr(12) = '1' then
+						-- MBX 7000-7FFF - bank switched area
+						sram_addr_bus <= "000000" & mbx_rom_bank & cpu_addr(11 downto 1);
+					elsif cartridge_cs = '1' and sams_regs(5) = '0' then
 						-- Handle paging of module port at 0x6000 unless sams_regs(5) is set (1E0A)
 						sram_addr_bus <= '0' & (basic_rom_bank and rommask_i) & cpu_addr(12 downto 1);	-- mapped to 0x00000..0x7FFFF
 					elsif disk_page_ena='1' and cpu_addr(15 downto 13) = "010" then	
@@ -870,6 +878,7 @@ begin
 
 				if cpu_reset_ctrl(1)='0' then
 					basic_rom_bank <= "000000";	-- Reset ROM bank selection
+					mbx_rom_bank <= "00";
 				end if;
 
 				-- CPU signal samplers
@@ -898,6 +907,8 @@ begin
 							grom_we <= '1';			-- GROM writes
 						elsif cartridge_cs='1' and sams_regs(5)='0' and mbx_i = '0' then
 							basic_rom_bank <= cpu_addr(6 downto 1);	-- capture ROM bank select
+						elsif cartridge_cs='1' and cpu_addr(12 downto 1)='0'&x"FF"&"111" and mbx_i = '1' then -- mbx bank switch (>6FFE)
+							mbx_rom_bank <= data_from_cpu(9 downto 8);
 						elsif cpu_addr(15 downto 8) = x"84" then	
 							tms9919_we <= '1';		-- Audio chip write
 							audio_data_out <= data_from_cpu(15 downto 8);
