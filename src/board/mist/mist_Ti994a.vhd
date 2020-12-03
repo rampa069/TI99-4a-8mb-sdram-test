@@ -70,12 +70,13 @@ architecture rtl of mist_ti994a is
                                 "F,BIN,Load G.bin;"&
                                 "S0,DSK,Drive 1;"&
                                 "S1,DSK,Drive 2;"&
-                                "OD,Cart Type,Normal,MBX;"&
+--                                "OD,Cart Type,Normal,MBX;"&
                                 "OE,Scratchpad RAM,256B,1KB;"&
                                 "OA,Turbo,Off,On;"&
                                 "OGH,Speech,Off,5220,5200;"&
                                 "O6,Joystick swap,Off,On;"&
                                 "O23,Scanlines,Off,25%,50%,75%;"&
+                                "O5,Blend,Off,On;"&
                                 "T0,Reset;";
 
   function to_slv(s: string) return std_logic_vector is 
@@ -357,7 +358,7 @@ begin
 
       rommask_i       => rommask_s,
       scratch_1k_i    => status(14),
-      mbx_i           => status(13),
+      mbx_i           => '0',--status(13),
       flashloading_i  => downl,
       turbo_i         => status(10)
     );
@@ -413,7 +414,7 @@ begin
   
   mist_video : work.mist.mist_video
     generic map (
-      SD_HCNT_WIDTH => 10,
+      SD_HCNT_WIDTH => 11,
       COLOR_DEPTH => 6,
       OSD_COLOR => "011",
       OSD_X_OFFSET => "00"&x"10"
@@ -425,7 +426,8 @@ begin
       ypbpr       => ypbpr,
       no_csync    => no_csync,
       rotate      => "00",
-      blend       => '0',
+      blend       => status(5),
+      ce_divider  => '1',
 
       SPI_SCK     => SPI_SCK,
       SPI_SS3     => SPI_SS3,
