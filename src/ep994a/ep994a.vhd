@@ -452,16 +452,27 @@ begin
 						(others => 'Z');
 
 	sram_16bit_read_bus <= cpu_ram_d_i; --SRAM_DAT(15 downto 0) when sram_addr_bus(0)='0' else SRAM_DAT(31 downto 16);
-						
+
 	process(clk, switch)
 	begin
 		if rising_edge(clk) then
 			if cpu_access = '0' then
 				cpu_ram_ce_n_o	<= debug_sram_ce0;
+				cpu_ram_we_n_o <= debug_sram_we;
 			else
 				cpu_ram_ce_n_o	<= MEM_n;
+				if MEM_n = '0' and WE_n = '0'
+					and cpu_addr(15 downto 12) /= x"9"        -- 9XXX addresses don't go to RAM
+					and cpu_addr(15 downto 11) /= x"8" & '1'  -- 8800-8FFF don't go to RAM
+					and cpu_addr(15 downto 13) /= "000"       -- 0000-1FFF don't go to RAM
+					and (cartridge_cs='0'                     -- writes to cartridge region do not go to RAM
+						or (mbx_i='1' and cpu_addr(15 downto 10) = "011011"))
+				then
+					cpu_ram_we_n_o <= '0';
+				else
+					cpu_ram_we_n_o <= '1';
+				end if;
 			end if;
-			cpu_ram_we_n_o	<=		debug_sram_we;  -- when cpu_access = '0' else WE_n; 
 		end if;
 	end process;
 
