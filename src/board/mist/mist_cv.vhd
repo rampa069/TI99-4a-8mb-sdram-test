@@ -166,34 +166,35 @@ architecture rtl of mist_cv is
   end component data_io;
 
   component sdram
+    generic ( MHZ: integer := 42 );
     port (
         SDRAM_DQ    : inout std_logic_vector(15 downto 0);
         SDRAM_A     : out std_logic_vector(12 downto 0);
         SDRAM_DQML  : out std_logic;
         SDRAM_DQMH  : out std_logic;
-        SDRAM_BA    : out std_logic_vector(1 downto 0);
+        SDRAM_BA    : out std_logic_vector( 1 downto 0);
         SDRAM_nCS   : out std_logic;
         SDRAM_nWE   : out std_logic;
         SDRAM_nRAS  : out std_logic;
         SDRAM_nCAS  : out std_logic;
-        SDRAM_CKE   : out std_logic;
 
-        init        : in std_logic;
-        clk         : in std_logic;
-        wtbt        : in std_logic_vector(1 downto 0);
+        init_n      : in  std_logic;
+        clk         : in  std_logic;
 
-        addr        : in std_logic_vector(24 downto 0);
-        rd          : in std_logic;
-        dout        : out std_logic_vector(7 downto 0);
-        din         : in std_logic_vector(7 downto 0);
-        we          : in std_logic;
-        ready       : out std_logic
+        port1_req   : in  std_logic;
+        port1_ack   : out std_logic;
+        port1_we    : in  std_logic;
+        port1_a     : in  std_logic_vector(23 downto 1);
+        port1_ds    : in  std_logic_vector( 1 downto 0);
+        port1_d     : in  std_logic_vector(15 downto 0);
+        port1_q     : out std_logic_vector(15 downto 0)
     );
   end component sdram;
 
   signal clk21m3 : std_logic;
   signal clkref  : std_logic;
   signal rom_en  : std_logic;
+  signal rom_enD : std_logic;
   signal force_reset : std_logic := '0';
   signal reset_n_s : std_logic;
   
@@ -297,13 +298,15 @@ architecture rtl of mist_cv is
   signal ioctl_dout         : std_logic_vector(7 downto 0);
   signal rom_wr             : std_logic;
   signal sd_wrack           : std_logic;
-  signal ram_ready          : std_logic;
   signal sg1000             : std_logic;
   signal dahjeeA            : std_logic;
   signal sg1000_row         : std_logic_vector(2 downto 0);
   signal sg1000_col         : std_logic_vector(11 downto 0);
   signal uart_rx_d          : std_logic;
   signal uart_rx_d2         : std_logic;
+
+  signal sdram_req          : std_logic;
+  signal sdram_q            : std_logic_vector(15 downto 0);
 
 begin
 
@@ -319,6 +322,7 @@ begin
       );
       
   SDRAM_CLK <= clk_mem_s;
+  SDRAM_CKE <= '1';
 
   UART_TX <= '1';
   uart: process (clk_21m3_s)
@@ -726,23 +730,23 @@ begin
         SDRAM_nWE   => SDRAM_nWE,
         SDRAM_nRAS  => SDRAM_nRAS,
         SDRAM_nCAS  => SDRAM_nCAS,
-        SDRAM_CKE   => SDRAM_CKE,
 
-        init        => not pll_locked,
+        init_n      => pll_locked,
         clk         => clk_mem_s,
-        wtbt        => "00",
 
-        addr        => cart_a,
-        rd          => rom_en,
-        dout        => cart_d_s,
-        din         => ioctl_dout,
-        we          => rom_wr,
-        ready       => ram_ready
+        port1_req   => sdram_req,
+        port1_ack   => open,
+        port1_we    => downl,
+        port1_a     => cart_a(23 downto 1),
+        port1_ds    => cart_a(0) & not cart_a(0),
+        port1_d     => ioctl_dout & ioctl_dout,
+        port1_q     => sdram_q
   );
 
   cart_a_s(24 downto 20) <= "00000";
   rom_en <= not (cart_en_80_n_s and cart_en_a0_n_s and cart_en_c0_n_s and cart_en_e0_n_s and cart_en_sg1000_n_s);
   cart_a <= cart_a_s when downl = '0' else romwr_a;
+  cart_d_s <= sdram_q(15 downto 8) when cart_a_s(0) = '1' else sdram_q(7 downto 0);
 
   clkref <= '1' when clk_mem_cnt = "000" else '0';
   force_reset <= downl;
@@ -752,6 +756,11 @@ begin
     if rising_edge (clk_mem_s) then
         clk_mem_cnt <= clk_mem_cnt + 1;
         old_downl <= downl;
+
+        rom_enD <= rom_en;
+        if rom_wr = '1' or (rom_enD = '0' and rom_en = '1') then
+          sdram_req <= not sdram_req;
+        end if;
 
         if sg1000 = '1' and downl = '1' then
             if old_downl = '0' then

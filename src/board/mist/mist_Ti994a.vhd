@@ -29,7 +29,7 @@ entity mist_ti994a is
     SDRAM_BA : out std_logic_vector(1 downto 0); -- SDRAM Bank Address
     SDRAM_CLK : out std_logic; -- SDRAM Clock
     SDRAM_CKE: out std_logic; -- SDRAM Clock Enable
-    
+
     -- SPI
     SPI_SCK : in std_logic;
     SPI_DI : in std_logic;
@@ -113,6 +113,7 @@ architecture rtl of mist_ti994a is
   end component data_io;
 
   component sdram
+    generic ( MHZ: integer := 42 );
     port (
         SDRAM_DQ    : inout std_logic_vector(15 downto 0);
         SDRAM_A     : out std_logic_vector(12 downto 0);
@@ -123,18 +124,17 @@ architecture rtl of mist_ti994a is
         SDRAM_nWE   : out std_logic;
         SDRAM_nRAS  : out std_logic;
         SDRAM_nCAS  : out std_logic;
-        SDRAM_CKE   : out std_logic;
 
-        init        : in  std_logic;
+        init_n      : in  std_logic;
         clk         : in  std_logic;
-        wtbt        : in  std_logic_vector( 1 downto 0);
 
-        addr        : in  std_logic_vector(24 downto 0);
-        rd          : in  std_logic;
-        dout        : out std_logic_vector(15 downto 0);
-        din         : in  std_logic_vector(15 downto 0);
-        we          : in  std_logic;
-        ready       : out std_logic
+        port1_req   : in  std_logic;
+        port1_ack   : out std_logic;
+        port1_we    : in  std_logic;
+        port1_a     : in  std_logic_vector(23 downto 1);
+        port1_ds    : in  std_logic_vector( 1 downto 0);
+        port1_d     : in  std_logic_vector(15 downto 0);
+        port1_q     : out std_logic_vector(15 downto 0)
     );
   end component sdram;
 
@@ -236,7 +236,6 @@ architecture rtl of mist_ti994a is
   signal ioctl_dout         : std_logic_vector(7 downto 0);
   signal rom_wr             : std_logic;
   signal sd_wrack           : std_logic;
-  signal ram_ready          : std_logic;
   signal uart_rx_d          : std_logic;
   signal uart_rx_d2         : std_logic;
 
@@ -244,7 +243,11 @@ architecture rtl of mist_ti994a is
   signal sdram_bs           : std_logic_vector( 1 downto 0);
   signal sdram_dout         : std_logic_vector(15 downto 0);
   signal sdram_din          : std_logic_vector(15 downto 0);
-  signal sdram_rd           : std_logic;
+  signal ram_rd             : std_logic;
+  signal ram_rdD            : std_logic;
+  signal ram_we             : std_logic;
+  signal ram_weD            : std_logic;
+  signal sdram_req          : std_logic;
   signal sdram_we           : std_logic;
 
 begin
@@ -259,8 +262,9 @@ begin
       c1     => clk_sys_s,
       locked => pll_locked
       );
-      
+
   SDRAM_CLK <= clk_sys_s;
+  SDRAM_CKE <= '1';
 
   UART_TX <= '1';
   uart: process (clk_sys_s)
@@ -525,18 +529,17 @@ begin
         SDRAM_nWE   => SDRAM_nWE,
         SDRAM_nRAS  => SDRAM_nRAS,
         SDRAM_nCAS  => SDRAM_nCAS,
-        SDRAM_CKE   => SDRAM_CKE,
 
-        init        => not pll_locked,
+        init_n      => pll_locked,
         clk         => clk_sys_s,
-        wtbt        => sdram_bs,
 
-        addr        => sdram_addr,
-        rd          => sdram_rd,
-        dout        => sdram_dout,
-        din         => sdram_din,
-        we          => sdram_we,
-        ready       => ram_ready
+        port1_req   => sdram_req,
+        port1_ack   => open,
+        port1_we    => sdram_we,
+        port1_a     => sdram_addr(23 downto 1),
+        port1_ds    => sdram_bs,
+        port1_d     => sdram_din,
+        port1_q     => sdram_dout
   );
 
   -- apply some mask when .D was loaded last
@@ -555,8 +558,8 @@ begin
                 std_logic_vector(unsigned(romwr_a) + x"86000") when index = x"04" or index = x"81" else -- .g
                 std_logic_vector(unsigned(romwr_a) + x"80000"); -- .rom
 
-  sdram_we <= not (cpu_ram_ce_n_s or cpu_ram_we_n_s) when downl = '0' else rom_wr;
-  sdram_rd <= not (cpu_ram_ce_n_s or not cpu_ram_we_n_s) when downl = '0' else '0';
+  ram_we <= not (cpu_ram_ce_n_s or cpu_ram_we_n_s) when downl = '0' else rom_wr;
+  ram_rd <= not (cpu_ram_ce_n_s or not cpu_ram_we_n_s) when downl = '0' else '0';
   sdram_din <= cpu_ram_d_from_ti_s when downl = '0' else ioctl_dout & ioctl_dout;
   sdram_bs <= not cpu_ram_be_n_s when downl = '0' else not romwr_a(0) & romwr_a(0);
 
@@ -567,6 +570,12 @@ begin
   begin
     if rising_edge (clk_sys_s) then
         clk_mem_cnt <= clk_mem_cnt + 1;
+        ram_weD <= ram_we;
+        ram_rdD <= ram_rd;
+        if (ram_we = '1' and ram_weD = '0') or (ram_rd = '1' and ram_rdD = '0') then
+          sdram_req <= not sdram_req;
+          sdram_we <= ram_we;
+        end if;
     end if;
   end process;
 
