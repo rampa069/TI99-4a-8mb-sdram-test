@@ -286,6 +286,7 @@ set_instance_assignment -name CURRENT_STRENGTH_NEW 8MA -to VGA_VS
 set_instance_assignment -name CURRENT_STRENGTH_NEW 8MA -to VGA_HS
 set_instance_assignment -name CURRENT_STRENGTH_NEW 4MA -to UART_TX
 set_instance_assignment -name FAST_INPUT_REGISTER ON -to UART_RX
+set_location_assignment PLL_1 -to pll|altpll_component|auto_generated|pll1
 set_global_assignment -name VHDL_FILE ps2kbd.vhd
 set_global_assignment -name VHDL_FILE ps2kbd_pkg.vhd
 set_global_assignment -name VHDL_FILE keyboard.vhd
@@ -297,7 +298,6 @@ set_global_assignment -name QIP_FILE "mist-modules/mist.qip"
 set_global_assignment -name VHDL_FILE ../../board/misc/dpram.vhd
 set_global_assignment -name QIP_FILE ../../T80/T80.qip
 set_global_assignment -name QIP_FILE ../../sn76489/sn76489.qip
-set_global_assignment -name SYSTEMVERILOG_FILE ../../YM2149.sv
 set_global_assignment -name VHDL_FILE "../../vdp18/vdp18_pack-p.vhd"
 set_global_assignment -name VHDL_FILE ../../vdp18/vdp18_pattern.vhd
 set_global_assignment -name VHDL_FILE ../../vdp18/vdp18_sprite.vhd
@@ -319,6 +319,8 @@ set_global_assignment -name VHDL_FILE "../../cv_comp_pack-p.vhd"
 set_global_assignment -name VHDL_FILE ../../tech/cyclone/cv_por.vhd
 set_global_assignment -name VHDL_FILE "../../tech/tech_comp_pack-p.vhd"
 set_global_assignment -name VHDL_FILE ../../cv_console.vhd
+set_global_assignment -name VHDL_FILE ../../ym2149/YM2149.vhd
+set_global_assignment -name VHDL_FILE ../../ym2149/vol_table_array.vhd
 set_global_assignment -name VHDL_FILE "../../board/snespad/snespad_pack-p.vhd"
 set_global_assignment -name VHDL_FILE ../../board/snespad/snespad_pad.vhd
 set_global_assignment -name VHDL_FILE ../../board/snespad/snespad_ctrl.vhd
@@ -332,5 +334,4 @@ set_global_assignment -name QIP_FILE ../../board/mist/mist_pll.qip
 set_global_assignment -name SIGNALTAP_FILE ../../../syn/mist/rom.stp
 set_global_assignment -name SIGNALTAP_FILE ../../../syn/mist/vdp.stp
 set_global_assignment -name SIGNALTAP_FILE ../../../syn/mist/kbd.stp
-set_location_assignment PLL_1 -to pll|altpll_component|auto_generated|pll1
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top

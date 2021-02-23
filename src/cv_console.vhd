@@ -168,32 +168,6 @@ architecture struct of cv_console is
     );
   end component;
 
-  component YM2149
-  port (
-    CLK         : in  std_logic;
-    CE          : in  std_logic;
-    RESET       : in  std_logic;
-    BDIR        : in  std_logic; -- Bus Direction (0 - read , 1 - write)
-    BC          : in  std_logic; -- Bus control
-    DI          : in  std_logic_vector(7 downto 0);
-    DO          : out std_logic_vector(7 downto 0);
-    CHANNEL_A   : out std_logic_vector(7 downto 0);
-    CHANNEL_B   : out std_logic_vector(7 downto 0);
-    CHANNEL_C   : out std_logic_vector(7 downto 0);
-
-    SEL         : in  std_logic;
-    MODE        : in  std_logic;
-
-    ACTIVE      : out std_logic_vector(5 downto 0);
-
-    IOA_in      : in  std_logic_vector(7 downto 0);
-    IOA_out     : out std_logic_vector(7 downto 0);
-
-    IOB_in      : in  std_logic_vector(7 downto 0);
-    IOB_out     : out std_logic_vector(7 downto 0)
-    );
-  end component;
-
   signal por_n_s          : std_logic;
   signal reset_n_s        : std_logic;
 
@@ -225,9 +199,7 @@ architecture struct of cv_console is
 
   -- AY-8910 signal
   signal ay_d_s           : std_logic_vector( 7 downto 0);
-  signal ay_ch_a_s        : std_logic_vector( 7 downto 0);
-  signal ay_ch_b_s        : std_logic_vector( 7 downto 0);
-  signal ay_ch_c_s        : std_logic_vector( 7 downto 0);
+  signal ay_out_s         : std_logic_vector( 9 downto 0);
 
   -- Controller signals
   signal d_from_ctrl_s    : std_logic_vector( 7 downto 0);
@@ -267,7 +239,7 @@ architecture struct of cv_console is
 begin
 
   vdd_s <= '1';
-  audio_o <= ("0" & unsigned(psg_audio_s) & "00") + unsigned(ay_ch_a_s) + unsigned(ay_ch_b_s) + unsigned(ay_ch_c_s);
+  audio_o <= ("0" & unsigned(psg_audio_s) & "00") + unsigned(ay_out_s);
 
   int_n_s <= ctrl_int_n_s when sg1000 = '0' else vdp_int_n_s;
   nmi_n_s <= vdp_int_n_s when sg1000 = '0' else joy0_i(7) and joy1_i(7);
@@ -325,29 +297,22 @@ begin
       DO         => d_from_cpu_s
     );
 
-  ym2149_inst: YM2149
+  -----------------------------------------------------------------------------
+  -- AY8910 Programmable Sound Generator (for SGM module)
+  -----------------------------------------------------------------------------
+  ym2149_inst: work.YM2149
   port map (
     CLK         => clk_i,
-    CE          => clk_en_3m58_p_s,
-    RESET       => not reset_n_s,
-    BDIR        => not ay_addr_we_n_s or not ay_data_we_n_s,
-    BC          => not ay_addr_we_n_s or not ay_data_rd_n_s,
-    DI          => d_from_cpu_s,
-    DO          => ay_d_s,
-    CHANNEL_A   => ay_ch_a_s,
-    CHANNEL_B   => ay_ch_b_s,
-    CHANNEL_C   => ay_ch_c_s,
+    ENA         => clk_en_3m58_p_s,
+    RESET_L     => reset_n_s,
+    I_BDIR      => not ay_addr_we_n_s or not ay_data_we_n_s,
+    I_BC1       => not ay_addr_we_n_s or not ay_data_rd_n_s,
+    I_DA        => d_from_cpu_s,
+    O_DA        => ay_d_s,
+    O_AUDIO_L   => ay_out_s,
 
-    SEL         => '0',
-    MODE        => '0',
-
-    ACTIVE      => open,
-
-    IOA_in      => (others => '0'),
-    IOA_out     => open,
-
-    IOB_in      => (others => '0'),
-    IOB_out     => open
+    I_IOA       => (others => '0'),
+    I_IOB       => (others => '0')
     );
 
   -----------------------------------------------------------------------------
