@@ -68,8 +68,8 @@ architecture rtl of mist_ti994a is
                                 "F,BIN,Load Full or C.bin;"&
                                 "F,BIN,Load D.bin;"&
                                 "F,BIN,Load G.bin;"&
-                                "S0,DSK,Drive 1;"&
-                                "S1,DSK,Drive 2;"&
+                                "S0U,DSK,Drive 1;"&
+                                "S1U,DSK,Drive 2;"&
 --                                "OD,Cart Type,Normal,MBX;"&
                                 "OE,Scratchpad RAM,256B,1KB;"&
                                 "OA,Turbo,Off,On;"&
