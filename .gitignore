@@ -1,4 +1,5 @@
 PLLJ_PLLSPE_INFO.txt
+build_id.vhd
 *.bak
 *.qws
 syn/

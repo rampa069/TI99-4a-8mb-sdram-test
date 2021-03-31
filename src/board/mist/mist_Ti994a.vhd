@@ -8,6 +8,7 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 use work.mist.all;
 use work.vdp18_col_pack.all;
+use work.build_id.all;
 
 entity mist_ti994a is
 
@@ -77,7 +78,8 @@ architecture rtl of mist_ti994a is
                                 "O6,Joystick swap,Off,On;"&
                                 "O23,Scanlines,Off,25%,50%,75%;"&
                                 "O5,Blend,Off,On;"&
-                                "T0,Reset;";
+                                "T0,Reset;"&
+                                "V,v"&BUILD_DATE;
 
   function to_slv(s: string) return std_logic_vector is 
     constant ss: string(1 to s'length) := s; 

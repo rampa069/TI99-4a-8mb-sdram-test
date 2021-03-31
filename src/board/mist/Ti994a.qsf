@@ -48,6 +48,7 @@ set_global_assignment -name RESERVE_DATA0_AFTER_CONFIGURATION "USE AS REGULAR IO
 set_global_assignment -name CYCLONEIII_CONFIGURATION_SCHEME "PASSIVE SERIAL"
 set_global_assignment -name GENERATE_RBF_FILE ON
 set_global_assignment -name PROJECT_OUTPUT_DIRECTORY ../../../syn/mist
+set_global_assignment -name PRE_FLOW_SCRIPT_FILE "quartus_sh:build_id.tcl"
 
 set_location_assignment PIN_7 -to LED
 set_location_assignment PIN_54 -to CLOCK_27[0]
@@ -288,6 +289,7 @@ set_instance_assignment -name CURRENT_STRENGTH_NEW 4MA -to UART_TX
 set_instance_assignment -name FAST_INPUT_REGISTER ON -to UART_RX
 set_location_assignment PLL_1 -to pll|altpll_component|auto_generated|pll1
 set_global_assignment -name VHDL_FILE mist_Ti994a.vhd
+set_global_assignment -name VHDL_FILE build_id.vhd
 set_global_assignment -name VHDL_FILE spram.vhd
 set_global_assignment -name VHDL_FILE sprom.vhd
 set_global_assignment -name SYSTEMVERILOG_FILE sdram.sv
