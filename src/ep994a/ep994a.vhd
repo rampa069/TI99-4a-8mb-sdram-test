@@ -142,18 +142,20 @@ architecture Behavioral of ep994a is
 
 	component fdc1772 is
 		generic (
-			CLK              : integer := 42660000;
+			MODEL            : integer := 1;
 			CLK_EN           : integer := 2031;
-			SECTOR_SIZE_CODE : integer := 1  -- 256 bytes/sector
+			INVERT_HEAD_RA   : boolean := true;
+			EXT_MOTOR        : boolean := true;
+			IMG_TYPE         : integer := 3
 		);
 		port (
 			clkcpu           : in  std_logic;
 			clk8m_en         : in  std_logic;
-			fd1771           : in  std_logic;
 
 			floppy_drive     : in  std_logic_vector( 3 downto 0);
 			floppy_side      : in  std_logic;
 			floppy_reset     : in  std_logic;
+			floppy_motor     : in  std_logic;
 
 			irq              : out std_logic;
 			drq              : out std_logic;
@@ -905,11 +907,11 @@ begin
 	(
 		clkcpu  => clk,
 		clk8m_en => disk_clk_en,
-		fd1771 => '1',
 
 		floppy_drive => "11"&not disk_sel(1 downto 0),
 		floppy_side => not disk_side,
 		floppy_reset => reset_n_s,
+		floppy_motor => disk_motor,
 
 		irq => disk_irq,
 		drq => disk_drq,
