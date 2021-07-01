@@ -185,33 +185,7 @@ architecture Behavioral of ep994a is
 	signal funky_reset 		: std_logic_vector(15 downto 0) := (others => '0');
 	signal real_reset			: std_logic;
 	signal real_reset_n		: std_logic;
-	signal mem_data_out 		: std_logic_vector(7 downto 0);
-	signal mem_data_in 		: std_logic_vector(7 downto 0);
-	signal mem_addr			: std_logic_vector(31 downto 0);
-	signal mem_read_rq		: std_logic;
-	signal mem_read_ack		: std_logic;
-	signal mem_write_rq		: std_logic;
-	signal mem_write_ack		: std_logic;
-	-- SRAM memory controller state machine
-	type mem_state_type is (
-		idle, 
-		wr0, wr1, wr2,
-		rd0, rd1, rd2,
-		grace,
-		cpu_wr0, cpu_wr1, cpu_wr2,
-		cpu_rd0, cpu_rd1, cpu_rd2
-		);
-	signal mem_state : mem_state_type := idle;
-	signal mem_drive_bus : std_logic := '0';
-	
-	type ctrl_state_type is (
-		idle, control_write, control_read, ack_end
-		);
-	signal ctrl_state : ctrl_state_type := idle;
-	
-	signal debug_sram_ce0 : std_logic;
-	signal debug_sram_we  : std_logic;
-	signal debug_sram_oe  : std_logic;
+
 	signal sram_addr_bus  : std_logic_vector(18 downto 0); 
 	signal sram_16bit_read_bus : std_logic_vector(15 downto 0);	-- choose between (31..16) and (15..0) during reads.
 
@@ -227,12 +201,10 @@ architecture Behavioral of ep994a is
 	signal cpu_addr			: std_logic_vector(15 downto 0);
 	signal data_to_cpu		: std_logic_vector(15 downto 0);	-- data to CPU
 	signal data_from_cpu		: std_logic_vector(15 downto 0);	-- data from CPU
---	signal alatch_sampler	: std_logic_vector(15 downto 0);
 	signal wr_sampler			: std_logic_vector(3 downto 0);
 	signal rd_sampler			: std_logic_vector(3 downto 0);
 	signal cruclk_sampler   : std_logic_vector(3 downto 0);
 	signal cpu_access			: std_logic;		-- when '1' CPU owns the SRAM memory bus	
-	signal outreg				: std_logic_vector(15 downto 0);
 	signal mem_to_cpu   		: std_logic_vector(15 downto 0);
 
 	-- VDP read and write signals
@@ -267,9 +239,6 @@ architecture Behavioral of ep994a is
 	signal cartridge_cs	 : std_logic;	-- 0x6000..0x7FFF
 	signal mbx_rom_bank : std_logic_vector(1 downto 0);
 
-	-- audio subsystem
-	signal dac_data		: std_logic_vector(7 downto 0);	-- data from TMS9919 to DAC input
-	--signal dac_out_bit	: std_logic;		-- output to pin
 	-- SN76489 signal
 	signal psg_ready_s      : std_logic;
 	signal tms9919_we		: std_logic;		-- write enable pulse for the audio "chip"
@@ -339,16 +308,8 @@ architecture Behavioral of ep994a is
 --	signal bus_oe_n_internal : std_logic;
 	-- when to write to places
 	signal go_write   : std_logic;
-	signal cpu_mem_write_pending : std_logic;
-	-- counter of alatch pulses to produce a sign of life of the CPU
-	signal alatch_counter : std_logic_vector(19 downto 0);
 	
 	signal go_cruclk : std_logic;	-- CRUCLK write pulses from the soft TMS9900 core
-
--------------------------------------------------------------------------------	
--- SRAM debug signals with FPGA CPU
-	signal sram_debug : std_logic_vector(63 downto 0);
-	signal sram_capture : boolean := False;
 
 -------------------------------------------------------------------------------	
 -- Signals from FPGA CPU
@@ -381,30 +342,9 @@ architecture Behavioral of ep994a is
 -------------------------------------------------------------------------------	
 -- Signals for SPI Flash controller
 -------------------------------------------------------------------------------	
-	signal clk8 : std_logic := '0';	-- about 8 MHz clock, i.e. 100MHz divided by 12 which is 8.3MHz
-	signal clk8_divider : integer range 0 to 15 := 0;
-	signal romLoaded : std_logic;
-	signal flashDataOut : STD_LOGIC_VECTOR (15 downto 0);
-	signal flashAddrOut : STD_LOGIC_VECTOR (19 downto 0);
-	signal flashRamWE_n : std_logic;
 	signal flashLoading : std_logic;
-	signal lastFlashRamWE_n : std_logic;	-- last state of flashRamWE_n
 	signal lastFlashLoading : std_logic;	-- last state of flashLoading
 
--------------------------------------------------------------------------------
--- Signals for LPC1343 SPI controller receiver
--------------------------------------------------------------------------------
-	signal lastLPC_CLK : std_logic;
-	signal lastLPC_CS : std_logic_vector(7 downto 0) := x"00";
-	signal spiLPC_rx : std_logic_vector(7 downto 0);
-	signal spiLPC_tx : std_logic_vector(7 downto 0);
-	signal spi_bitcount : integer range 0 to 7;
-	signal spi_ready : boolean := false;
-	signal spi_test_toggle : boolean := false;
-	signal spi_test_count : integer range 0 to 255 := 0;
-	signal spi_clk_sampler : std_logic_vector(2 downto 0) := "000";
-	signal spi_rx_bit : std_logic;	
-	signal wait_clock : boolean := false;
 -------------------------------------------------------------------------------
 
 begin
@@ -436,35 +376,25 @@ begin
 
 	-------------------------------------
 
-	-- Use all 32 bits of RAM, we use CE0 and CE1 to control what chip is active.
-	-- The byte enables are driven the same way for both chips.
-	cpu_ram_be_n_o	<= "00" when cpu_access = '1' else -- or flashLoading = '1' else	-- TMS99105 is always 16-bit, use CE 
-						--"10" when mem_addr(0) = '1' else	-- lowest byte
-						"01";										-- second lowest byte
-	cpu_ram_a_o <= sram_addr_bus;
-  
-	cpu_ram_d_o		<= -- broadcast 16-bit wide lines when flash loading is active
-						flashDataOut when cpu_access='0' and flashLoading='1' and mem_drive_bus='1' else
-						-- broadcast on all byte lanes when memory controller is writing
-						--mem_data_out & mem_data_out when cpu_access='0' and mem_drive_bus='1' else
-						-- broadcast on 16-bit wide lanes when CPU is writing
-						data_from_cpu when cpu_access='1' and MEM_n='0' and WE_n = '0' else
-						(others => 'Z');
+	cpu_ram_be_n_o <= "00"; -- TMS99105 is always 16-bit, use CE 
+	cpu_ram_a_o    <= sram_addr_bus;
+	cpu_ram_d_o    <= data_from_cpu;
 
-	sram_16bit_read_bus <= cpu_ram_d_i; --SRAM_DAT(15 downto 0) when sram_addr_bus(0)='0' else SRAM_DAT(31 downto 16);
+	sram_16bit_read_bus <= cpu_ram_d_i;
 
 	process(clk, switch)
 	begin
 		if rising_edge(clk) then
 			if cpu_access = '0' then
-				cpu_ram_ce_n_o	<= debug_sram_ce0;
-				cpu_ram_we_n_o <= debug_sram_we;
+				cpu_ram_ce_n_o <= '1';
+				cpu_ram_we_n_o <= '1';
 			else
 				cpu_ram_ce_n_o	<= MEM_n;
 				if MEM_n = '0' and WE_n = '0'
 					and cpu_addr(15 downto 12) /= x"9"        -- 9XXX addresses don't go to RAM
 					and cpu_addr(15 downto 11) /= x"8" & '1'  -- 8800-8FFF don't go to RAM
 					and cpu_addr(15 downto 13) /= "000"       -- 0000-1FFF don't go to RAM
+					and cpu_addr(15 downto 13) /= "010"       -- 4000-5FFF don't go to RAM
 					and (cartridge_cs='0'                     -- writes to cartridge region do not go to RAM
 						or (mbx_i='1' and cpu_addr(15 downto 10) = "011011"))
 				then
@@ -517,9 +447,6 @@ begin
 	speech_i <= '0' when speech_model = "11" else '1';
 
 	switch <= not reset_n_s;
-	mem_read_rq <= '0';
-	mem_write_rq <= '0';
-	mem_addr <= (others => '0');
 	flashloading <= flashloading_i;--'0';
 
 	process(clk, switch)
@@ -563,14 +490,6 @@ begin
 			-- reset processing
 			if funky_reset(funky_reset'length-1) = '0' then
 				-- reset activity here
-				mem_state <= idle;
-				ctrl_state <= idle;
-				mem_drive_bus <= '0';
-				debug_sram_ce0 <= '1';
-				debug_sram_WE <= '1';
-				debug_sram_oe <= '1';
-				mem_read_ack <= '0';
-				mem_write_ack <= '0';
 				cru9901 <= x"00000000";
 				cru1100_regs <= (others => '0');
 				sams_regs <= (others => '0');
@@ -579,12 +498,7 @@ begin
 				conl_ready  <= '1';
 				conl_hold 	<= '1';
 				conl_nmi 	<= '1';
-				
-				alatch_counter <= (others => '0');
-				
-				cpu_mem_write_pending <= '0';
-				sram_capture <= True;
-				
+
 				cpu_single_step <= x"00";
 				
 				waits <= (others => '0');
@@ -678,16 +592,6 @@ begin
 					end if;
 				end if;
 
-				if MEM_n = '0' and go_write = '1' 
-					and cpu_addr(15 downto 12) /= x"9"			-- 9XXX addresses don't go to RAM
-					and cpu_addr(15 downto 11) /= x"8" & '1'	-- 8800-8FFF don't go to RAM
-					and cpu_addr(15 downto 13) /= "000"			-- 0000-1FFF don't go to RAM
-					and (cartridge_cs='0' 							-- writes to cartridge region do not go to RAM
-						or (mbx_i='1' and cpu_addr(15 downto 10) = "011011"))
-					then
-						cpu_mem_write_pending <= '1';
-				end if;
-
 				if cpu_single_step(1 downto 0)="11" and cpu_holda = '0' then
 					-- CPU single step is desired, and CPU is out of hold despite cpu_singe_step(0) being '1'.
 					-- This must mean that the CPU is started to execute an instruction, so zero out bit 1
@@ -695,227 +599,29 @@ begin
 					cpu_single_step(1) <= '0';	
 				end if;
 
-				-- for flash loading, sample the status of flashRamWE_n
-				lastFlashRamWE_n <= flashRamWE_n;
-
-				-- memory controller state machine
-				case mem_state is
-					when idle =>
-						mem_drive_bus <= '0';
-						debug_sram_ce0 <= '1';
-						debug_sram_WE <= '1';
-						debug_sram_oe <= '1';
-						mem_read_ack <= '0';
-						mem_write_ack <= '0';
---						cpu_access <= '1';		
-						--DEBUG2 <= '0';		
-						if flashLoading = '1' and cpu_holda = '1' and flashRamWE_n='0' and lastFlashRamWE_n='1' then
-							-- We are loading from flash memory chip to SRAM.
-							-- The total amount is 256K bytes. We perform the following mapping:
-							-- 1) First 128K loaded from flash are written from address 0 onwards (i.e. paged module RAM area)
-							-- 2) Next 64K are written to 80000 i.e. our 64K GROM area
-							-- 3) Last 64K are written to B0000 i.e. our DSR ROM and ROM area.
-							-- Note that addresses from flashAddrOut are byte address but LSB set to zero
-							if flashAddrOut(17)='0' then
-								sram_addr_bus <= "000" & flashAddrOut(16 downto 1);	-- 128K range from 00000
-							elsif flashAddrOut(16)='0' then
-								sram_addr_bus <= "1000" & flashAddrOut(15 downto 1);	-- 64K range from 80000
-							else
-								sram_addr_bus <= "1011" & flashAddrOut(15 downto 1);	-- 64K range from B0000
-							end if;
-							mem_state <= wr0;
-							mem_drive_bus <= '1';	-- only writes drive the bus
-						elsif mem_write_rq = '1' and mem_addr(20)='0' and cpu_holda='1' then
-							-- normal memory write
-							sram_addr_bus <= mem_addr(19 downto 1);	-- setup address
---							cpu_access <= '0';
-							mem_state <= wr0;
-							mem_drive_bus <= '1';	-- only writes drive the bus
-						elsif mem_read_rq = '1' and mem_addr(20)='0' and cpu_holda='1' then
-							sram_addr_bus <= mem_addr(19 downto 1);	-- setup address
---							cpu_access <= '0';
-							mem_state <= rd0;
-							mem_drive_bus <= '0';
-						elsif MEM_n = '0' and rd_sampler(1 downto 0) = "10" then
-							-- init CPU read cycle
---							cpu_access <= '1';	
-							mem_state <= cpu_rd0;
-							debug_sram_ce0 <= '0';	-- init read cycle
-							debug_sram_oe <= '0';
-							mem_drive_bus <= '0';
-						elsif cpu_mem_write_pending = '1' then
-							-- init CPU write cycle
---							cpu_access <= '1';
-							mem_state <= cpu_wr1;	-- EPEP jump directly to state 1!!!
-							debug_sram_ce0 <= '0';	-- initiate write cycle
-							debug_sram_WE <= '0';	
-							mem_drive_bus <= '1';	-- only writes drive the bus
-							--DEBUG2 <= '1';
-							cpu_mem_write_pending <= '0';
-						end if;
-					when wr0 => 
-						debug_sram_ce0 <= '0';	-- issue write strobes
-						debug_sram_WE <= '0';	
-						mem_state <= wr1;	
-					when wr1 => mem_state <= wr2;	-- waste time
-					when wr2 =>							-- terminate memory write cycle
-						debug_sram_WE <= '1';
-						debug_sram_ce0 <= '1';
-						mem_drive_bus <= '0';
-						mem_state <= grace;
-						if flashLoading = '0' then
-							mem_write_ack <= '1';
-						end if;
-
-					-- states to handle read cycles
-					when rd0 => 
-						debug_sram_ce0 <= '0';	-- init read cycle
-						debug_sram_oe <= '0';
-						mem_state <= rd1;
-					when rd1 => mem_state <= rd2;	-- waste some time
-					when rd2 => 
-						if mem_addr(0) = '1' then
-							mem_data_in <= sram_16bit_read_bus(7 downto 0);
-						else
-							mem_data_in <= sram_16bit_read_bus(15 downto 8);
-						end if;
-						debug_sram_ce0 <= '1';
-						debug_sram_oe <= '1';
-						mem_state <= grace;	
-						mem_read_ack <= '1';
-					when grace =>						-- one cycle grace period before going idle.
-						mem_state <= idle;			-- thus one cycle when mem_write_rq is not sampled after write.
-						mem_read_ack <= '0';
-						mem_write_ack <= '0';
-
-					-- CPU read cycle
-					when cpu_rd0 => mem_state <= cpu_rd1;
-					when cpu_rd1 => 
-						mem_state <= cpu_rd2;
-						mem_to_cpu <= sram_16bit_read_bus(15 downto 0);
-						if sram_capture then
-							sram_capture <= False;
-							sram_debug <= cpu_addr & "00000000000" & cpu_access & sram_addr_bus & '0' & sram_16bit_read_bus(15 downto 0);
-						end if;
-					when cpu_rd2 =>
-						debug_sram_ce0 <= '1';
-						debug_sram_oe <= '1';
-						mem_state <= grace;
-
-					-- CPU write cycle
-					when cpu_wr0 => mem_state <= cpu_wr1;
-					when cpu_wr1 => mem_state <= cpu_wr2;
-					when cpu_wr2 =>
-						mem_state <= grace;
-						debug_sram_WE <= '1';
-						debug_sram_ce0 <= '1';
-						mem_drive_bus <= '0';
-						mem_state <= grace;
-				end case;
-
-				-- Handle control state transfer is a separate
-				-- state machine in order not to disturb the TMS99105.
-				case ctrl_state is 
-					when idle =>
-						if mem_read_rq = '1' and mem_addr(20)='1' then
-							if mem_addr(4 downto 3) = "00" then
-								-- read keyboard matrix (just for debugging)
-								ki := to_integer(unsigned(mem_addr(2 downto 0)));
-								mem_data_in(0) <= keyboard(ki, 0);
-								mem_data_in(1) <= keyboard(ki, 1);
-								mem_data_in(2) <= keyboard(ki, 2);
-								mem_data_in(3) <= keyboard(ki, 3);
-								mem_data_in(4) <= keyboard(ki, 4);
-								mem_data_in(5) <= keyboard(ki, 5);
-								mem_data_in(6) <= keyboard(ki, 6);
-								mem_data_in(7) <= keyboard(ki, 7);
-							else
-								case mem_addr(4 downto 0) is
-									when "01000" => mem_data_in <= cpu_reset_ctrl;
-									when "01001" => mem_data_in <= cpu_single_step;
-									when "10000" => mem_data_in <= cpu_debug_out(7 downto 0);
-									when "10001" => mem_data_in <= cpu_debug_out(15 downto 8);
-									when "10010" => mem_data_in <= cpu_debug_out(23 downto 16);
-									when "10011" => mem_data_in <= cpu_debug_out(31 downto 24);
-									when "10100" => mem_data_in <= cpu_debug_out(39 downto 32);
-									when "10101" => mem_data_in <= cpu_debug_out(47 downto 40);									
-									when "10110" => mem_data_in <= cpu_debug_out(55 downto 48);
-									when "10111" => mem_data_in <= cpu_debug_out(63 downto 56);
-									when "11000" => mem_data_in <= cpu_debug_out(71 downto 64); -- sram_debug(7 downto 0);
-									when "11001" => mem_data_in <= cpu_debug_out(79 downto 72); -- sram_debug(15 downto 8);
-									when "11010" => mem_data_in <= cpu_debug_out(87 downto 80); -- sram_debug(23 downto 16);
-									when "11011" => mem_data_in <= cpu_debug_out(95 downto 88); -- sram_debug(31 downto 24);
-									when "11100" => mem_data_in <= alu_debug_arg1(7 downto 0); -- sram_debug(39 downto 32);
-									when "11101" => mem_data_in <= alu_debug_arg1(15 downto 8);-- sram_debug(47 downto 40);									
-									when "11110" => mem_data_in <= alu_debug_arg2(7 downto 0);-- sram_debug(55 downto 48);
-									when "11111" => mem_data_in <= alu_debug_arg2(15 downto 8);-- sram_debug(63 downto 56);									
-									when others =>
-										mem_data_in <= x"AA";
-								end case;
-							end if;
-							ctrl_state <= control_read;
-						elsif mem_write_rq = '1' and mem_addr(20)='1' then 
-							ctrl_state <= control_write;
-						end if;
-					when control_read =>
-						mem_read_ack <= '1';
-						ctrl_state <= ack_end;
-					when ack_end =>
-						mem_read_ack <= '0';
-						mem_write_ack <= '0';
-						ctrl_state <= idle;
-					when control_write =>
-						if mem_addr(3) = '0' then 
-							ki := to_integer(unsigned(mem_addr(2 downto 0)));
-							keyboard(ki, 0) <= mem_data_out(0);
-							keyboard(ki, 1) <= mem_data_out(1);
-							keyboard(ki, 2) <= mem_data_out(2);
-							keyboard(ki, 3) <= mem_data_out(3);
-							keyboard(ki, 4) <= mem_data_out(4);
-							keyboard(ki, 5) <= mem_data_out(5);
-							keyboard(ki, 6) <= mem_data_out(6);
-							keyboard(ki, 7) <= mem_data_out(7);
-						else
-							-- CPU reset control register
-							if mem_addr(2 downto 0) = "000" then 
-								cpu_reset_ctrl <= mem_data_out;
-							elsif mem_addr(2 downto 0) = "001" then 
-								cpu_single_step <= mem_data_out;
-							end if;
-						end if;
-						mem_write_ack <= '1';
-						ctrl_state <= ack_end;
-				end case;
-
 				if cpu_reset_ctrl(1)='0' then
 					basic_rom_bank <= "000000";	-- Reset ROM bank selection
 					mbx_rom_bank <= "00";
 				end if;
 
 				-- CPU signal samplers
-				if cpu_as='1' then
-					alatch_counter <= std_logic_vector(to_unsigned(1+to_integer(unsigned(alatch_counter)), alatch_counter'length));
-				end if;
 				wr_sampler <= wr_sampler(wr_sampler'length-2 downto 0) & WE_n;
 				rd_sampler <= rd_sampler(rd_sampler'length-2 downto 0) & RD_n;
 				cruclk_sampler <= cruclk_sampler(cruclk_sampler'length-2 downto 0) & cpu_cruclk;
-				if (clk_en_10m7_i = '1') then
-					vdp_wr <= '0';
-					vdp_rd <= '0';
-				end if;
+
+				vdp_wr <= '0';
+				vdp_rd <= '0';
 				grom_we <= '0';
 				if (psg_ready_s = '1') then
 					tms9919_we <= '0';
 				end if;				
 				paging_wr_enable <= '0';
 				if sams_regs(6)='0' then	-- if sams_regs(6) is set I/O is out and paged RAM is there instead
-					if go_write = '1' and MEM_n='0' then
-						if cpu_addr(15 downto 8) = x"80" then
-							outreg <= data_from_cpu;			-- write to >80XX is sampled in the output register
-						elsif cpu_addr(15 downto 8) = x"8C" then
+					if cpu_wr = '1' then
+						if cpu_addr(15 downto 8) = x"8C" then
 							vdp_wr <= '1';
 						elsif cpu_addr(15 downto 8) = x"9C" then
-							grom_we <= '1';			-- GROM writes
+							grom_we <= go_write;			-- GROM writes
 						elsif cartridge_cs='1' and sams_regs(5)='0' and mbx_i = '0' then
 							basic_rom_bank <= cpu_addr(6 downto 1);	-- capture ROM bank select
 						elsif cartridge_cs='1' and cpu_addr(12 downto 1)='0'&x"FF"&"111" and mbx_i = '1' then -- mbx bank switch (>6FFE)
@@ -924,10 +630,10 @@ begin
 							tms9919_we <= '1';		-- Audio chip write
 							audio_data_out <= data_from_cpu(15 downto 8);
 						elsif paging_registers = '1' then 
-							paging_wr_enable <= '1';
+							paging_wr_enable <= go_write;
 						end if;
 					end if;	
-					if MEM_n='0' and rd_sampler(1 downto 0)="00" and cpu_addr(15 downto 8)=x"88" then
+					if cpu_rd = '1' and cpu_addr(15 downto 8)=x"88" then
 						vdp_rd <= '1';
 					end if;
 					grom_rd <= '0';
@@ -1011,19 +717,11 @@ begin
 		end if;	-- rising_edge
 	end process;
 
-	cpu_hold <= '1' when mem_read_rq='1' or mem_write_rq='1' or (cpu_single_step(0)='1' and cpu_single_step(1)='0') 
+	cpu_hold <= '1' when (cpu_single_step(0)='1' and cpu_single_step(1)='0') 
 							or flashLoading = '1' else '0'; -- issue DMA request
-	--DEBUG1 <= go_write;
 
 	go_write <= '1' when wr_sampler = "1000" else '0'; -- wr_sampler = "1110" else '0';
 	go_cruclk <= '1' when cruclk_sampler(1 downto 0) = "01" else '0';
-
-
-	-- Here drive the two shield board LEDs to include a little status information:
-	-- LED1: Disk access
-	-- LED2: ALATCH counter indication (i.e. CPU is alive)
---	conl_led1 <= cru1100;
---	conl_led2 <= alatch_counter(19);
 
 	vdp_data_out(7 downto 0) <= x"00";
 	data_to_cpu <= 
@@ -1034,7 +732,7 @@ begin
 		pager_data_out(7 downto 0) & pager_data_out(7 downto 0) when paging_registers = '1' else	-- replicate pager values on both hi and lo bytes
 		sram_16bit_read_bus(15 downto 8) & x"00" when sams_regs(6)='0' and cpu_addr(15 downto 8) = x"98" and cpu_addr(1)='0' and grom_ram_addr(0)='0' and grom_selected='1' else
 		sram_16bit_read_bus(7 downto 0)  & x"00" when sams_regs(6)='0' and cpu_addr(15 downto 8) = x"98" and cpu_addr(1)='0' and grom_ram_addr(0)='1' and grom_selected='1' else
-	   x"FF00"                       when sams_regs(6)='0' and cpu_addr(15 downto 8) = x"98" and cpu_addr(1)='0' and grom_selected='0' else
+		x"FF00"                       when sams_regs(6)='0' and cpu_addr(15 downto 8) = x"98" and cpu_addr(1)='0' and grom_selected='0' else
 		-- CRU space signal reads
 		cru_read_bit & "000" & x"000"	when MEM_n='1' else
 		x"FFF0"								when MEM_n='1' else -- other CRU
@@ -1079,16 +777,16 @@ begin
 
 	-- GROM implementation - GROM's are mapped to external RAM
 	extbasgrom : entity work.gromext port map (
-			clk 		=> clk,
-			din 		=> data_from_cpu(15 downto 8),
-			dout		=> grom_data_out,
-			we 		=> grom_we,
-			rd 		=> grom_rd,
-			selected => grom_selected,	-- output from GROM available, i.e. GROM address is ours
-			mode 		=> cpu_addr(5 downto 1),
-			reset 	=> real_reset_n,
-			addr 		=> grom_ram_addr
-		);
+		clk 		=> clk,
+		din 		=> data_from_cpu(15 downto 8),
+		dout		=> grom_data_out,
+		we 		=> grom_we,
+		rd 		=> grom_rd,
+		selected => grom_selected,	-- output from GROM available, i.e. GROM address is ours
+		mode 		=> cpu_addr(5 downto 1),
+		reset 	=> real_reset_n,
+		addr 		=> grom_ram_addr
+	);
 
 	-----------------------------------------------------------------------------
 	-- SN76489 Programmable Sound Generator
@@ -1169,7 +867,7 @@ begin
 		waits => waits,
 		scratch_en => '0',
 		stuck => cpu_stuck,
-		 turbo => turbo_i
+		turbo => turbo_i
 	);
 
 	speech : work.tispeechsyn
