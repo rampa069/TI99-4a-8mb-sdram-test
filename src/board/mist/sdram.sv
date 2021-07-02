@@ -70,24 +70,23 @@ localparam RFRSH_CYCLES = 16'd78*MHZ/4'd10;
 cmd issued  registered
  0 RAS0
  1          ras0
- 2
- 3 CAS0
- 4          cas0
- 5
- 6          data0 returned
+ 2 CAS0
+ 3          cas0
+ 4
+ 5          data0 returned
 */
 
 localparam STATE_RAS0      = 3'd0;   // first state in cycle
-localparam STATE_CAS0      = STATE_RAS0 + RASCAS_DELAY + 1'd1; // CAS phase - 3
-localparam STATE_READ0     = 3'd0;// STATE_CAS0 + CAS_LATENCY + 2'd2; // 7
-localparam STATE_LAST      = 3'd6;
+localparam STATE_CAS0      = STATE_RAS0 + RASCAS_DELAY; // CAS phase - 3
+localparam STATE_READ0     = STATE_CAS0 + CAS_LATENCY + 1'd1; // 5
+localparam STATE_LAST      = STATE_READ0;
 
 reg [2:0] t;
 
 always @(posedge clk) begin
 	t <= t + 1'd1;
 	if (t == STATE_LAST) t <= STATE_RAS0;
-	if (t == STATE_RAS0 && !init && port1_req == port1_state && !need_refresh) t <= STATE_RAS0;
+	if (t == STATE_RAS0 && !init && !port1_active && !need_refresh) t <= STATE_RAS0;
 end
 
 // ---------------------------------------------------------------------
@@ -141,6 +140,7 @@ reg        port1_state;
 
 reg [10:0] refresh_cnt;
 wire       need_refresh = (refresh_cnt >= RFRSH_CYCLES);
+wire       port1_active = port1_req ^ port1_ack /* synthesis keep */;
 
 always @(posedge clk) begin
 
@@ -175,7 +175,7 @@ always @(posedge clk) begin
 		if(t == STATE_RAS0) begin
 			{ oe_latch, we_latch } <= 2'b00;
 
-			if (port1_req ^ port1_state) begin
+			if (port1_active) begin
 				sd_cmd <= CMD_ACTIVE;
 				SDRAM_A <= port1_a[22:10];
 				SDRAM_BA <= port1_a[24:23];
