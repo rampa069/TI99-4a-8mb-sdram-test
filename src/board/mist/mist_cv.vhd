@@ -166,7 +166,7 @@ architecture rtl of mist_cv is
   end component data_io;
 
   component sdram
-    generic ( MHZ: integer := 42 );
+    generic ( MHZ: integer := 84 );
     port (
         SDRAM_DQ    : inout std_logic_vector(15 downto 0);
         SDRAM_A     : out std_logic_vector(12 downto 0);
@@ -206,7 +206,7 @@ architecture rtl of mist_cv is
   signal joy_an0    : std_logic_vector(15 downto 0);
   signal joy_an1    : std_logic_vector(15 downto 0);
   signal joy_an     : std_logic_vector(15 downto 0);
-  signal status     : std_logic_vector(31 downto 0);
+  signal status     : std_logic_vector(63 downto 0);
   signal scandoubler_disable : std_logic;
   signal ypbpr      : std_logic;
   signal no_csync   : std_logic;
@@ -230,12 +230,11 @@ architecture rtl of mist_cv is
   signal cart_d         : std_logic_vector(7 downto 0);
   signal chksum         : std_logic_vector(7 downto 0);
   
-  signal clk_cnt_q            : unsigned(1 downto 0);
-	signal clk_en_5m37_q			  : std_logic;
-	signal clk_21m3_s					  : std_logic;
+  signal clk_cnt_q      : unsigned(1 downto 0);
+  signal clk_21m3_s     : std_logic;
   signal clk_mem_s      : std_logic;
   signal clk_mem_cnt    : unsigned(2 downto 0);
-  signal clk_en_10m7_q			  : std_logic;
+  signal clk_en_10m7_q  : std_logic;
   signal clk_en_spinner_counter_s : unsigned(15 downto 0);
   signal clk_en_spinner_s   : std_logic;
   signal por_n_s              : std_logic;
@@ -316,8 +315,8 @@ begin
   pll : entity work.mist_pll
     port map (
       inclk0 => CLOCK_27(0),
-      c0     => clk_21m3_s,
-      c1     => clk_mem_s,
+      c0     => clk_mem_s,
+      c2     => clk_21m3_s,
       locked => pll_locked
       );
       
@@ -344,7 +343,6 @@ begin
     if reset_n_s = '0' then
       clk_cnt_q     <= (others => '0');
       clk_en_10m7_q <= '0';
-      clk_en_5m37_q <= '0';
       clk_en_spinner_s <=  '0';
       clk_en_spinner_counter_s <= (others => '0');
 
@@ -362,14 +360,6 @@ begin
           clk_en_10m7_q <= '1';
         when others =>
           clk_en_10m7_q <= '0';
-      end case;
-
-      -- 5.37 MHz clock enable ------------------------------------------------
-      case clk_cnt_q is
-        when "11" =>
-          clk_en_5m37_q <= '1';
-        when others =>
-          clk_en_5m37_q <= '0';
       end case;
 
       -- clk enable for spinner

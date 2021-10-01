@@ -115,7 +115,7 @@ architecture rtl of mist_ti994a is
   end component data_io;
 
   component sdram
-    generic ( MHZ: integer := 42 );
+    generic ( MHZ: integer := 84 );
     port (
         SDRAM_DQ    : inout std_logic_vector(15 downto 0);
         SDRAM_A     : out std_logic_vector(12 downto 0);
@@ -168,7 +168,7 @@ architecture rtl of mist_ti994a is
   signal joy_an0    : std_logic_vector(15 downto 0);
   signal joy_an1    : std_logic_vector(15 downto 0);
   signal joy_an     : std_logic_vector(15 downto 0);
-  signal status     : std_logic_vector(31 downto 0);
+  signal status     : std_logic_vector(63 downto 0);
   signal scandoubler_disable : std_logic;
   signal ypbpr      : std_logic;
   signal no_csync   : std_logic;
@@ -192,7 +192,7 @@ architecture rtl of mist_ti994a is
   signal sd_dout_strobe : std_logic;
   signal sd_buff_addr   : std_logic_vector(8 downto 0);
   signal img_mounted    : std_logic_vector(1 downto 0);
-  signal img_size       : std_logic_vector(31 downto 0);
+  signal img_size       : std_logic_vector(63 downto 0);
 
   signal red        : std_logic_vector(7 downto 0);
   signal green      : std_logic_vector(7 downto 0);
@@ -205,8 +205,8 @@ architecture rtl of mist_ti994a is
   signal old_downl      : std_logic;
   
   signal clk_cnt_q            : unsigned(1 downto 0);
-	signal clk_21m3_s					  : std_logic;
   signal clk_sys_s      : std_logic;
+  signal clk_mem_s      : std_logic;
   signal clk_mem_cnt    : unsigned(2 downto 0);
   signal clk_en_10m7_q			  : std_logic;
   signal por_n_s              : std_logic;
@@ -260,12 +260,12 @@ begin
   pll : entity work.mist_pll
     port map (
       inclk0 => CLOCK_27(0),
-      c0     => clk_21m3_s,
-      c1     => clk_sys_s,
+      c0     => clk_mem_s, -- 84 MHz
+      c1     => clk_sys_s, -- 42 MHz
       locked => pll_locked
       );
 
-  SDRAM_CLK <= clk_sys_s;
+  SDRAM_CLK <= clk_mem_s;
   SDRAM_CKE <= '1';
 
   UART_TX <= '1';
@@ -359,7 +359,7 @@ begin
       sd_din          => sd_din,
       sd_buff_addr    => sd_buff_addr,
       img_mounted     => img_mounted,
-      img_size        => img_size,
+      img_size        => img_size(31 downto 0),
       img_wp          => "00",
 
       rommask_i       => rommask_s,
@@ -508,7 +508,7 @@ begin
     );
 
   data_io_inst: data_io
-    port map(clk_sys_s, SPI_SCK, SPI_SS2, '1', SPI_DI, '1', not clkref, downl, index, rom_wr, romwr_a, ioctl_dout);
+    port map(clk_mem_s, SPI_SCK, SPI_SS2, '1', SPI_DI, '1', not clkref, downl, index, rom_wr, romwr_a, ioctl_dout);
 
   ---------------------------------------------------------
   -- 00000..7FFFF - Cartridge module port, paged, 512K, to support the TI megademo :)
@@ -533,7 +533,7 @@ begin
         SDRAM_nCAS  => SDRAM_nCAS,
 
         init_n      => pll_locked,
-        clk         => clk_sys_s,
+        clk         => clk_mem_s,
 
         port1_req   => sdram_req,
         port1_ack   => open,
@@ -568,9 +568,9 @@ begin
   clkref <= '1' when clk_mem_cnt = "000" else '0';
   force_reset <= downl;
 
-  process(clk_sys_s)
+  process(clk_mem_s)
   begin
-    if rising_edge (clk_sys_s) then
+    if rising_edge (clk_mem_s) then
         clk_mem_cnt <= clk_mem_cnt + 1;
         ram_weD <= ram_we;
         ram_rdD <= ram_rd;
