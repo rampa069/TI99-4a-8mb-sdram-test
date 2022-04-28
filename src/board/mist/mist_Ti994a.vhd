@@ -10,12 +10,12 @@ use work.mist.all;
 use work.vdp18_col_pack.all;
 use work.build_id.all;
 
-entity mist_ti994a is
+entity guest_mist is
 
   port (
     -- Clocks
     
-    CLOCK_27    : in std_logic_vector(1 downto 0); -- 27 MHz
+    CLOCK_27    : in std_logic; -- 27 MHz
 
 
     -- SDRAM
@@ -51,6 +51,10 @@ entity mist_ti994a is
     -- Audio
     AUDIO_L,
     AUDIO_R : out std_logic;
+
+    DAC_L,
+    DAC_R : out std_logic_vector(15 downto 0);
+
     
     -- LEDG
     LED : out std_logic;
@@ -60,9 +64,9 @@ entity mist_ti994a is
 
     );
 
-end mist_ti994a;
+end guest_mist;
 
-architecture rtl of mist_ti994a is
+architecture rtl of guest_mist is
 
   constant CONF_STR : string := "TI994A;;"&
                                 "F,C  D  G  ,Load;"&
@@ -259,7 +263,7 @@ begin
 
   pll : entity work.mist_pll
     port map (
-      inclk0 => CLOCK_27(0),
+      inclk0 => CLOCK_27,
       c0     => clk_mem_s, -- 84 MHz
       c1     => clk_sys_s, -- 42 MHz
       locked => pll_locked
@@ -389,7 +393,7 @@ begin
     generic map
     (
       widthad_a   => 15,
-      init_file   => "../../../roms/hex/spchrom.hex"
+      init_file   => "../roms/hex/spchrom.hex"
     )
     port map
     (
@@ -462,6 +466,9 @@ begin
       dac_i     => std_logic_vector(unsigned_audio_s),
       dac_o     => audio_s
     ); 
+
+  DAC_L <= unsigned_audio_s & "00000";	 
+  DAC_R <= unsigned_audio_s & "00000";	 
     
 -- MiST interfaces
 
