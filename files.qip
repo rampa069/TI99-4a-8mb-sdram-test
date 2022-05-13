@@ -2,7 +2,7 @@ set_global_assignment -name VHDL_FILE ../src/board/mist/mist_Ti994a.vhd
 set_global_assignment -name VHDL_FILE build_id.vhd
 set_global_assignment -name VHDL_FILE ../src/board/mist/spram.vhd
 set_global_assignment -name VHDL_FILE ../src/board/mist/sprom.vhd
-set_global_assignment -name SYSTEMVERILOG_FILE ../src/board/mist/sdram.sv
+#set_global_assignment -name SYSTEMVERILOG_FILE ../src/board/mist/sdram.sv
 #set_global_assignment -name SDC_FILE ../src/board/mist/Ti994a.sdc
 set_global_assignment -name QIP_FILE "../src/board/mist/mist-modules/mist.qip"
 set_global_assignment -name VHDL_FILE ../src/tech/cyclone/cv_por.vhd

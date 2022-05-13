@@ -78,7 +78,7 @@ architecture rtl of guest_mist is
 --                                "OD,Cart Type,Normal,MBX;"&
                                 "OE,Scratchpad RAM,256B,1KB;"&
                                 "OA,Turbo,Off,On;"&
-                                "OGH,Speech,Off,5220,5200;"&
+--                                "OGH,Speech,Off,5220,5200;"&
                                 "O6,Joystick swap,Off,On;"&
                                 "O23,Scanlines,Off,25%,50%,75%;"&
                                 "O5,Blend,Off,On;"&
@@ -119,10 +119,10 @@ architecture rtl of guest_mist is
   end component data_io;
 
   component sdram
-    generic ( MHZ: integer := 84 );
+    generic ( MHZ: integer := 43 );
     port (
         SDRAM_DQ    : inout std_logic_vector(15 downto 0);
-        SDRAM_A     : out std_logic_vector(12 downto 0);
+        SDRAM_A     : out std_logic_vector(11 downto 0);
         SDRAM_DQML  : out std_logic;
         SDRAM_DQMH  : out std_logic;
         SDRAM_BA    : out std_logic_vector( 1 downto 0);
@@ -130,6 +130,7 @@ architecture rtl of guest_mist is
         SDRAM_nWE   : out std_logic;
         SDRAM_nRAS  : out std_logic;
         SDRAM_nCAS  : out std_logic;
+		  SDRAM_CKE   : out std_logic;
 
         init_n      : in  std_logic;
         clk         : in  std_logic;
@@ -137,7 +138,7 @@ architecture rtl of guest_mist is
         port1_req   : in  std_logic;
         port1_ack   : out std_logic;
         port1_we    : in  std_logic;
-        port1_a     : in  std_logic_vector(23 downto 1);
+        port1_a     : in  std_logic_vector(21 downto 1);
         port1_ds    : in  std_logic_vector( 1 downto 0);
         port1_d     : in  std_logic_vector(15 downto 0);
         port1_q     : out std_logic_vector(15 downto 0)
@@ -211,7 +212,7 @@ architecture rtl of guest_mist is
   signal clk_cnt_q            : unsigned(1 downto 0);
   signal clk_sys_s      : std_logic;
   signal clk_mem_s      : std_logic;
-  signal clk_mem_cnt    : unsigned(2 downto 0);
+  signal clk_mem_cnt            : unsigned(2 downto 0);
   signal clk_en_10m7_q			  : std_logic;
   signal por_n_s              : std_logic;
 
@@ -255,22 +256,18 @@ architecture rtl of guest_mist is
   signal ram_weD            : std_logic;
   signal sdram_req          : std_logic;
   signal sdram_we           : std_logic;
-
 begin
 
-  LED <= not downl;
+  LED <= downl;
   reset_n_s <= not(status(0) or buttons(1) or force_reset or not pll_locked);
-
   pll : entity work.mist_pll
     port map (
       inclk0 => CLOCK_27,
-      c0     => clk_mem_s, -- 84 MHz
-      c1     => clk_sys_s, -- 42 MHz
+      c0     => clk_sys_s, -- 42 MHz
       locked => pll_locked
       );
 
-  SDRAM_CLK <= clk_mem_s;
-  SDRAM_CKE <= '1';
+  SDRAM_CLK <= clk_sys_s;
 
   UART_TX <= '1';
   uart: process (clk_sys_s)
@@ -349,7 +346,7 @@ begin
       vsync_n_o       => vs,
       audio_total_o   => unsigned_audio_s,
 
-      speech_model    => not status(17 downto 16),
+      speech_model    => "11", --not status(17 downto 16),
       sr_re_o         => open,
       sr_addr_o       => speech_rom_a_s,
       sr_data_i       => speech_rom_d_s,
@@ -389,18 +386,18 @@ begin
   -----------------------------------------------------------------------------
   -- SPEECH ROM
   -----------------------------------------------------------------------------
-  speech_rom : entity work.sprom
-    generic map
-    (
-      widthad_a   => 15,
-      init_file   => "../roms/hex/spchrom.hex"
-    )
-    port map
-    (
-      clock       => clk_sys_s,
-      address     => speech_rom_a_s,
-      q           => speech_rom_d_s
-    );
+--  speech_rom : entity work.sprom
+--    generic map
+--    (
+--      widthad_a   => 15,
+--      init_file   => "../roms/hex/spchrom.hex"
+--    )
+--    port map
+--    (
+--      clock       => clk_sys_s,
+--      address     => speech_rom_a_s,
+--      q           => speech_rom_d_s
+--    );
 
   -----------------------------------------------------------------------------
   -- VRAM
@@ -515,7 +512,8 @@ begin
     );
 
   data_io_inst: data_io
-    port map(clk_mem_s, SPI_SCK, SPI_SS2, '1', SPI_DI, '1', not clkref, downl, index, rom_wr, romwr_a, ioctl_dout);
+  port map(clk_sys_s, SPI_SCK, SPI_SS2, '1', SPI_DI, '1', not clkref, downl, index, rom_wr, romwr_a, ioctl_dout);
+  
 
   ---------------------------------------------------------
   -- 00000..7FFFF - Cartridge module port, paged, 512K, to support the TI megademo :)
@@ -530,7 +528,7 @@ begin
   ext_ram_rom: sdram
   port map (
         SDRAM_DQ    => SDRAM_DQ,
-        SDRAM_A     => SDRAM_A,
+        SDRAM_A     => SDRAM_A(11 downto 0),
         SDRAM_DQML  => SDRAM_DQML,
         SDRAM_DQMH  => SDRAM_DQMH,
         SDRAM_BA    => SDRAM_BA,
@@ -538,14 +536,15 @@ begin
         SDRAM_nWE   => SDRAM_nWE,
         SDRAM_nRAS  => SDRAM_nRAS,
         SDRAM_nCAS  => SDRAM_nCAS,
+		  SDRAM_CKE   => SDRAM_CKE,
 
         init_n      => pll_locked,
-        clk         => clk_mem_s,
+        clk         => clk_sys_s,
 
         port1_req   => sdram_req,
         port1_ack   => open,
         port1_we    => sdram_we,
-        port1_a     => sdram_addr(23 downto 1),
+        port1_a     => sdram_addr(21 downto 1),
         port1_ds    => sdram_bs,
         port1_d     => sdram_din,
         port1_q     => sdram_dout
@@ -574,10 +573,11 @@ begin
 
   clkref <= '1' when clk_mem_cnt = "000" else '0';
   force_reset <= downl;
-
-  process(clk_mem_s)
+  
+  
+  process(clk_sys_s)
   begin
-    if rising_edge (clk_mem_s) then
+    if rising_edge (clk_sys_s) then
         clk_mem_cnt <= clk_mem_cnt + 1;
         ram_weD <= ram_we;
         ram_rdD <= ram_rd;
