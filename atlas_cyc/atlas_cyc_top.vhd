@@ -37,8 +37,8 @@ entity atlas_top is
 		PS2_MOUSE_CLK    : inout std_logic;
 		PS2_MOUSE_DAT    : inout std_logic;
 		-- UART
-		UART_RXD : in std_logic;
-		UART_TXD : out std_logic;
+		UART_RXD : in std_logic :='1';
+		UART_TXD : out std_logic:='1';
 		--
 		UART_NULL_RXD: in std_logic;
 		UART_NULL_TXD: out std_logic;
@@ -320,8 +320,8 @@ begin
 				joy1 => joya,
 
 				-- UART
-				rxd       => rs232_rxd,
-				txd       => rs232_txd,
+				rxd       => UART_RXD,
+				txd       => UART_TXD,
 				intercept => intercept
 			);
 
