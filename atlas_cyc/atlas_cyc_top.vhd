@@ -15,16 +15,16 @@ entity atlas_top is
 		LED    : out std_logic_vector(7 downto 0);
 		-- SDRAM
 		DRAM_CLK   : out std_logic;
-		DRAM_CKE   : out std_logic;
-		DRAM_ADDR  : out std_logic_vector(12 downto 0);
+		DRAM_CKE   : out std_logic := '0';
+		DRAM_ADDR  : out std_logic_vector(12 downto 0) := (others => '0');
 		DRAM_BA    : out std_logic_vector(1 downto 0);
-		DRAM_DQ    : inout std_logic_vector(15 downto 0);
+		DRAM_DQ    : inout std_logic_vector(15 downto 0) := (others => 'Z');
 		DRAM_LDQM  : out std_logic;
 		DRAM_UDQM  : out std_logic;
-		DRAM_CS_N  : out std_logic;
-		DRAM_WE_N  : out std_logic;
-		DRAM_CAS_N : out std_logic;
-		DRAM_RAS_N : out std_logic;
+		DRAM_CS_N  : out std_logic := '1';
+		DRAM_WE_N  : out std_logic := '1';
+		DRAM_CAS_N : out std_logic := '1';
+		DRAM_RAS_N : out std_logic := '1';
 		-- HDMI TDMS [or VGA if ATLAS_CYC_VGA = 1]
 		TMDS : out std_logic_vector(7 downto 0) := (others => '0');
 		-- AUDIO

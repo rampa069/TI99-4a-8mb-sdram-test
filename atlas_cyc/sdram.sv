@@ -156,15 +156,17 @@ always @(posedge clk) begin
 
 			if(reset == 15) begin
 				sd_cmd <= CMD_PRECHARGE;
-				SDRAM_A[10] <= 1'b1;      // precharge all banks
+				{ SDRAM_DQMH, SDRAM_DQML } <= 2'b11;
+				//SDRAM_A[10] <= 1'b1;      // precharge all banks
+				SDRAM_A <= 12'b1;
 				SDRAM_BA <= 2'b00;
 			end
-			if(reset == 14) begin
+			if(reset == 1) begin
 				sd_cmd <= CMD_LOAD_MODE;
 				SDRAM_A <= MODE;
-				SDRAM_BA <= 2'b00;
+				//SDRAM_BA <= 2'b00;
 			end
-			if( reset > 6 && reset < 14) begin
+			if( reset ==12 || reset ==6) begin
 				sd_cmd <= CMD_AUTO_REFRESH;
 				SDRAM_CKE <= 1'b0;
 			end
