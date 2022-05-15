@@ -8,11 +8,23 @@ use work.demistify_config_pkg.all;
 -- -----------------------------------------------------------------------
 
 entity atlas_top is
+	generic (
+		ATLAS_CYC_EAR : natural := 2; -- 0 = JOY SEL pin,	1 = EAR pin,  2 = MIDI_WSBD
+		ATLAS_CYC_VGA : natural := 0; -- 0 = HDMI,  		1 = VGA
+		ATLAS_CYC_KEYB: natural := 0  -- 0=PS2 NO AT1, 1=PS2 AT1, 2=USB NO AT1, 3=USB AT1, 
+	);
 	port (
 		CLK12M : in std_logic;
 		CLK_X  : in std_logic;
 		KEY0   : in std_logic;
 		LED    : out std_logic_vector(7 downto 0);
+		-- PS2
+		PS2_KEYBOARD_1 	 : inout std_logic;
+		PS2_KEYBOARD_2 	 : inout std_logic;
+		PDP_4k7			 : out   std_logic;		--USB2PS2
+    	PDM_4k7			 : out   std_logic;
+		PS2_MOUSE_CLK    : inout std_logic;
+		PS2_MOUSE_DAT    : inout std_logic;
 		-- SDRAM
 		DRAM_CLK   : out std_logic;
 		DRAM_CKE   : out std_logic;
@@ -30,18 +42,16 @@ entity atlas_top is
 		-- AUDIO
 		SIGMA_R : out std_logic;
 		SIGMA_L : out std_logic;
-	
-		-- PS2
-		PS2_KEYBOARD_CLK : inout std_logic;
-		PS2_KEYBOARD_DAT : inout std_logic;
-		PS2_MOUSE_CLK    : inout std_logic;
-		PS2_MOUSE_DAT    : inout std_logic;
-		-- UART
-		UART_RXD : in std_logic :='1';
-		UART_TXD : out std_logic:='1';
-		--
-		UART_NULL_RXD: in std_logic;
-		UART_NULL_TXD: out std_logic;
+		-- -- I2S audio		
+		PI_MISO_I2S_BCLK		: 	 out std_logic	:= '0';
+		PI_MOSI_I2S_LRCLK		: 	 out std_logic	:= '0';
+		PI_CLK_I2S_DATA			: 	 out std_logic	:= '0';	
+		-- UART / MIDI
+		UART_TXD_MIDI_OUT 		: 	out std_logic;
+		UART_RXD_MIDI_WSBD 		: 	in std_logic;
+		PI_CS_MIDI_CLKBD		: 	in std_logic;
+		-- SHARED PIN_P11: JOY SELECT Output / EAR Input / MIDI
+		JOYX_SEL_EAR_MIDI_DABD  : 	inout std_logic := '0';
 		-- JOYSTICK 
 		JOY1_B2_P9 : in std_logic;
 		JOY1_B1_P6 : in std_logic;
@@ -49,8 +59,6 @@ entity atlas_top is
 		JOY1_DOWN  : in std_logic;
 		JOY1_LEFT  : in std_logic;
 		JOY1_RIGHT : in std_logic;
-		-- SHARED PIN_P11: JOY SELECT Output / EAR Input
-		JOYX_SEL_EAR : inout std_logic := '0';
 		-- SD Card
 		SD_CS_N_O : out std_logic := '1';
 		SD_SCLK_O : out std_logic := '0';
@@ -112,14 +120,27 @@ architecture RTL of atlas_top is
 	signal joyd : std_logic_vector(7 downto 0);
 
 
-
+	-- -- I2S audio
+	-- component audio_top is
+	-- Port ( 	
+	-- 		clk_50MHz : in STD_LOGIC; -- system clock
+	-- 		dac_MCLK : out STD_LOGIC; -- outputs to PMODI2L DAC
+	-- 		dac_LRCK : out STD_LOGIC;
+	-- 		dac_SCLK : out STD_LOGIC;
+	-- 		dac_SDIN : out STD_LOGIC;
+	-- 		L_data : 	in std_logic_vector(15 downto 0);  	-- LEFT data (16-bit signed)
+	-- 		R_data : 	in std_logic_vector(15 downto 0)  	-- RIGHT data (16-bit signed) 
+	-- );
+	-- end component;	
 
 	-- DAC AUDIO     
-	signal dac_l : signed(15 downto 0);
-	signal dac_r : signed(15 downto 0);
+	signal dac_l : std_logic_vector(15 downto 0);
+	signal dac_r : std_logic_vector(15 downto 0);
 
+	-- I2S 
+	signal i2s_mclk : std_logic;
 
-	-- HDMI TDMS signas
+	-- HDMI TDMS signals
 	signal clock_vga_s    : std_logic;
 	signal clock_dvi_s    : std_logic;
 	signal sound_hdmi_l_s : std_logic_vector(15 downto 0);
@@ -147,14 +168,16 @@ architecture RTL of atlas_top is
 	signal vga_x_hs  : std_logic;
 	signal vga_x_vs  : std_logic;
 
-
-	signal clock_50M : std_logic;
+	signal CLK50M : std_logic;
+	signal CLK48M : std_logic;
 
 	component pll2 is			-- for hdmi output & 50 MHz clock
 	    port (
 	--  areset : in std_logic;
 	    inclk0 : in std_logic;
-	    c0 : out std_logic;
+	    c0 : out std_logic;	
+	    c1 : out std_logic;	
+		 c2 : out std_logic;	
 	    locked : out std_logic
 	  );
 	end component;
@@ -162,6 +185,25 @@ architecture RTL of atlas_top is
 	-- SHARE PIN P11 EAR IN / JOY SEL OUT  
 	signal EAR        : std_logic;
 	signal JOYX_SEL_O : std_logic;
+	signal MIDI_DABD  : std_logic;
+
+	-- USB2PS2
+	component USB_PS2
+		port (
+		clk : in std_logic;
+		LedNum : in std_logic;
+		LedCaps : in std_logic;
+		LedScroll : in std_logic;
+		dp : inout std_logic;
+		dm : inout std_logic;
+		PS2data : out std_logic;
+		PS2clock : out std_logic
+	);
+	end component;
+
+	signal PS2data 		:  std_logic; 
+	signal PS2clock 	:  std_logic; 
+	signal clk48	    :  std_logic; 
 
 begin
 
@@ -178,22 +220,97 @@ begin
 	ps2_mouse_clk_in <= ps2_mouse_clk;
 	ps2_mouse_clk    <= '0' when ps2_mouse_clk_out = '0' else 'Z';
 
-	ps2_keyboard_dat_in <= ps2_keyboard_dat;
-	ps2_keyboard_dat    <= '0' when ps2_keyboard_dat_out = '0' else 'Z';
-	ps2_keyboard_clk_in <= ps2_keyboard_clk;
-	ps2_keyboard_clk    <= '0' when ps2_keyboard_clk_out = '0' else 'Z';
+-- ATLAS_CYC_KEYB -- 0 = PS2 NON AT1, 1 = PS2 AT1,  2 = USB NON AT1, 3 = USB AT1, 
+
+	KEYBOARD_0 : if ATLAS_CYC_KEYB = 0 generate -- Keyboard PS2 previous AT1
+		ps2_keyboard_dat_in <= PS2_KEYBOARD_1;
+		PS2_KEYBOARD_1    <= '0' when ps2_keyboard_dat_out = '0' else 'Z';
+		ps2_keyboard_clk_in <= PS2_KEYBOARD_2;
+		PS2_KEYBOARD_2    <= '0' when ps2_keyboard_clk_out = '0' else 'Z';
+	end generate KEYBOARD_0;
+
+	KEYBOARD_1 : if ATLAS_CYC_KEYB = 1 generate -- Keyboard PS2 AT1 
+		ps2_keyboard_dat_in <= PS2_KEYBOARD_2;
+		PS2_KEYBOARD_2    <= '0' when ps2_keyboard_dat_out = '0' else 'Z';
+		ps2_keyboard_clk_in <= PS2_KEYBOARD_1;
+		PS2_KEYBOARD_1    <= '0' when ps2_keyboard_clk_out = '0' else 'Z';
+	end generate KEYBOARD_1;
+
+	KEYBOARD_2 : if ATLAS_CYC_KEYB = 2 generate -- Keyboard USB previous AT1
+		-- USB2PS2
+		PDP_4k7	<= '0';
+		PDM_4k7	<= '0';
+
+		USB_PS2_inst : USB_PS2
+		port map (
+			clk => CLK48M,
+			LedNum =>  '0',
+			LedCaps =>  '0',
+			LedScroll =>  '0',
+			dp => PS2_KEYBOARD_2,
+			dm => PS2_KEYBOARD_1,
+			PS2data => PS2data,
+			PS2clock => PS2clock
+		);
+
+		ps2_keyboard_dat_in <= PS2data;
+		ps2_keyboard_clk_in <= PS2clock;
+	end generate KEYBOARD_2;
+
+	KEYBOARD_3 : if ATLAS_CYC_KEYB = 3 generate -- Keyboard USB AT1 
+		-- USB2PS2
+		PDP_4k7	<= '0';
+		PDM_4k7	<= '0';
+
+		USB_PS2_inst : USB_PS2
+		port map (
+			clk => CLK48M,
+			LedNum =>  '0',
+			LedCaps =>  '0',
+			LedScroll =>  '0',
+			dp => PS2_KEYBOARD_1,
+			dm => PS2_KEYBOARD_2,
+			PS2data => PS2data,
+			PS2clock => PS2clock
+		);
+
+		ps2_keyboard_dat_in <= PS2data;
+		ps2_keyboard_clk_in <= PS2clock;
+	end generate KEYBOARD_3;
 
 
+	PIN_P11_JOYSEL_0 : if ATLAS_CYC_EAR = 0 generate -- JOY Select Output
+		JOYX_SEL_O   <= '1';
+		JOYX_SEL_EAR_MIDI_DABD <= JOYX_SEL_O;
+		EAR          <= '0';
+	end generate PIN_P11_JOYSEL_0;
 
-	JOYX_SEL_O   <= '1';
-	JOYX_SEL_EAR <= JOYX_SEL_O;
-	EAR          <= '0';
+	PIN_P11_JOYSEL_1 : if ATLAS_CYC_EAR = 1 generate -- EAR Input
+		EAR 		<= JOYX_SEL_EAR_MIDI_DABD;
+	end generate PIN_P11_JOYSEL_1;
+
+	PIN_P11_JOYSEL_2 : if ATLAS_CYC_EAR = 2 generate -- MIDI WSBD input
+		MIDI_DABD 	<= JOYX_SEL_EAR_MIDI_DABD;
+		EAR         <= '0';
+	end generate PIN_P11_JOYSEL_2;
+
 
 	joya <= "11" & JOY1_B2_P9 & JOY1_B1_P6 & JOY1_RIGHT & JOY1_LEFT & JOY1_DOWN & JOY1_UP;
 	joyb <= (others => '1');
 	joyc <= (others => '1');
 	joyd <= (others => '1');
 
+	-- -- I2S audio
+	-- audio_i2s: audio_top
+	-- port map(
+	-- 	clk_50MHz => CLK50M,
+	-- 	dac_MCLK  => I2S_MCLK,
+	-- 	dac_LRCK  => PI_MOSI_I2S_LRCLK,
+	-- 	dac_SCLK  => PI_MISO_I2S_BCLK,
+	-- 	dac_SDIN  => PI_CLK_I2S_DATA,
+	-- 	L_data    => std_logic_vector(dac_l),
+	-- 	R_data    => std_logic_vector(dac_r)
+	-- );		
 
 
 	-- BEGIN VGA ATLAS -------------------  
@@ -203,30 +320,160 @@ begin
 	VGA_HS <= vga_hsync;
 	VGA_VS <= vga_vsync;
 
-	LED(7) <= vga_red(7);
-	LED(6) <= vga_green(7);
-	LED(5) <= vga_blue(7);
-	
-
-	TMDS(7) <= VGA_R(1);
-	TMDS(6) <= VGA_R(0);
-	TMDS(5) <= VGA_G(1);
-	TMDS(4) <= VGA_G(0);
-	TMDS(3) <= VGA_B(1);
-	TMDS(2) <= VGA_B(0);
-	TMDS(1) <= VGA_VS;
-	TMDS(0) <= VGA_HS;
-
+	PINS_HDMI_VGA_1 : if ATLAS_CYC_VGA = 1 generate -- VGA
+		TMDS(7) <= VGA_R(1);
+		TMDS(6) <= VGA_R(0);
+		TMDS(5) <= VGA_G(1);
+		TMDS(4) <= VGA_G(0);
+		TMDS(3) <= VGA_B(1);
+		TMDS(2) <= VGA_B(0);
+		TMDS(1) <= VGA_VS;
+		TMDS(0) <= VGA_HS;
+	end generate PINS_HDMI_VGA_1;
 	-- END VGA ATLAS -------------------  
 
---
---	-- PLL VIDEO / 50 MHz
+
+	-- PLL VIDEO / 50 MHz / 48 USB
 	pllvideo : pll2
 	port map (
-		inclk0		=> CLK12M,				
-		c0			=> clock_50M,			-- 50 MHz
+		inclk0		=> CLK12M,				--      
+		c0			=> CLK50M,				-- 50 MHz
+		c1			=> clock_dvi_s,			--140 Mhz	    
+		c2			=> clock_vga_s,			-- 28 Mhz 	   
 		locked		=> locked
 	);
+
+
+	-- BEGIN HDMI ATLAS -------------------   
+	PINS_HDMI_VGA_2 : if ATLAS_CYC_VGA = 0 generate -- HDMI TDMS
+
+		--clock_vga_s <= vga_clk;
+		--clock_dvi_s <= hdmi_clk;
+
+		-- HDMI AUDIO
+		sound_hdmi_l_s <= dac_l;
+		sound_hdmi_r_s <= dac_r;
+		-- sound_hdmi_l_s <= '0' & std_logic_vector(dac_l(15 downto 1));
+		-- sound_hdmi_r_s <= '0' & std_logic_vector(dac_r(15 downto 1));
+
+
+		------------------------------------------------------------------------------------------------------
+		-- JUST LEAVE ONE HDMI WRAPPER (1/2/3) UNCOMMENTED                                                  --
+		-- SELECT PROJECT FILES FOR HDMI WRAPPER (1/2/3) AT DeMiSTify/Board/atlas_cyc/atlas_cyc_support.tcl --
+		------------------------------------------------------------------------------------------------------
+		
+
+		---- BEGIN HDMI 1 NO SOUND (MULTICPM / Next186) 
+
+--		TMDS(6) <= '0';
+--		TMDS(4) <= '0';
+--		TMDS(2) <= '0';
+--		TMDS(0) <= '0';
+--
+--		inst_hdmi : entity work.hdmi
+--			port map(
+--				-- clocks
+--				CLK_PIXEL_I => clock_vga_s,
+--				CLK_DVI_I   => clock_dvi_s,
+--				--components
+--				R_I        => vga_red ,
+--				G_I        => vga_green,
+--				B_I        => vga_blue,
+--				BLANK_I    => vga_blank,
+--				HSYNC_I    => vga_hsync,
+--				VSYNC_I    => vga_vsync,
+--				TMDS_D0_O  => TMDS(3),
+--				TMDS_D1_O  => TMDS(5),
+--				TMDS_D2_O  => TMDS(7),
+--				TMDS_CLK_O => TMDS(1)
+--			);
+--
+--		---- END HDMI 1 
+
+
+		----  BEGIN HDMI 2 (MSX)  
+
+		 hdmi: entity work.hdmi
+		 generic map (
+		 	FREQ	=> 28000000,	-- pixel clock frequency 
+		 	CTS		=> 28000,		-- CTS = Freq(pixclk) * N / (128 * Fs)
+		 	-- FREQ	=> 28630000,	-- pixel clock frequency 
+		 	-- CTS	=> 28630,		-- CTS = Freq(pixclk) * N / (128 * Fs)
+		 	FS		=> 48000,		-- audio sample rate - should be 32000, 41000 or 48000 = 48KHz
+		 	N		=> 6144			-- N = 128 * Fs /1000,  128 * Fs /1500 <= N <= 128 * Fs /300 (Check HDMI spec 7.2 for details)
+		 ) 
+		 port map (
+		 	I_CLK_PIXEL		=> clock_vga_s,
+		 	I_R				=> vga_red,
+		 	I_G				=> vga_green,
+		 	I_B				=> vga_blue,
+		 	I_BLANK			=> not vga_blank,
+		 	I_HSYNC			=> vga_hsync,
+		 	I_VSYNC			=> vga_vsync,
+		 	-- PCM audio
+		 	I_AUDIO_ENABLE	=> '1',
+		 	I_AUDIO_PCM_L 	=> sound_hdmi_l_s,
+		 	I_AUDIO_PCM_R	=> sound_hdmi_r_s,
+		 	-- TMDS parallel pixel synchronous outputs (serialize LSB first)
+		 	O_RED			=> tdms_r_s,
+		 	O_GREEN			=> tdms_g_s,
+		 	O_BLUE			=> tdms_b_s
+		 );
+
+		 hdmio: entity work.hdmi_out_altera
+		 port map (
+		 	clock_pixel_i		=> clock_vga_s,
+		 	clock_tdms_i		=> clock_dvi_s,
+		 	red_i				=> tdms_r_s,
+		 	green_i				=> tdms_g_s,
+		 	blue_i				=> tdms_b_s,
+		 	tmds_out_p			=> tdms_p_s,
+		 	tmds_out_n			=> tdms_n_s
+		 );
+
+		 TMDS(7)	<= tdms_p_s(2);	-- 2+		
+		 TMDS(6)	<= tdms_n_s(2);	-- 2-		
+		 TMDS(5)	<= tdms_p_s(1);	-- 1+			
+		 TMDS(4)	<= tdms_n_s(1);	-- 1-		
+		 TMDS(3)	<= tdms_p_s(0);	-- 0+		
+		 TMDS(2)	<= tdms_n_s(0);	-- 0-	
+		 TMDS(1)	<= tdms_p_s(3);	-- CLK+	
+		 TMDS(0)	<= tdms_n_s(3);	-- CLK-
+
+		---- END HDMI 2 
+
+
+		---- BEGIN HDMI 3 (ATARI)    ok PAL, AUDIO 32k, 41k, 48k IS NOT GOOD, NTSC NOT TESTED
+
+		-- inst_dvid: entity work.hdmi
+		-- generic map (
+		-- 	FREQ	=> 35480000,	-- pixel clock frequency 
+		-- 	CTS		=> 35480,		-- CTS = Freq(pixclk) * N / (128 * Fs)
+		-- 	FS		=> 41000,		-- audio sample rate - should be 32000, 41000 or 48000 = 48KHz
+		-- 	N		=> 6144			-- N = 128 * Fs /1000,  128 * Fs /1500 <= N <= 128 * Fs /300 (Check HDMI spec 7.2 for details)
+		-- ) 
+		-- port map(
+		-- 	I_CLK_VGA	=> clock_vga_s,
+		-- 	I_CLK_TMDS	=> clock_dvi_s,
+		-- 	I_HSYNC		=> vga_x_hs,
+		-- 	I_VSYNC		=> vga_x_vs,
+		-- 	I_BLANK		=> vga_blank,
+		-- 	I_RED		=> vga_x_r & vga_x_r(4 downto 3),
+		-- 	I_GREEN		=> vga_x_g & vga_x_g(4 downto 3),
+		-- 	I_BLUE		=> vga_x_b & vga_x_b(4 downto 3),
+		-- 	I_AUDIO_PCM_L 	=> sound_hdmi_l_s,
+		-- 	I_AUDIO_PCM_R	=> sound_hdmi_r_s,
+		-- 	O_TMDS			=> TMDS
+		-- );
+
+		---- END HDMI 3 
+
+
+		---- END HDMI PAL ATLAS 
+
+	end generate PINS_HDMI_VGA_2;
+	
+	-- END HDMI ATLAS -------------------
 
 
 	guest : component guest_mist
@@ -247,8 +494,8 @@ begin
 			SDRAM_CLK  => DRAM_CLK,
 			SDRAM_CKE  => DRAM_CKE,
 			--UART
-			UART_TX  => open,
-			UART_RX  => '1',
+			UART_TX  => UART_TXD_MIDI_OUT,
+			UART_RX  => UART_RXD_MIDI_WSBD,
 --			UART_TX  => open,
 --			UART_RX  => EAR,   
 			--SPI
@@ -266,30 +513,33 @@ begin
 			VGA_R     => vga_red(7 downto 2),
 			VGA_G     => vga_green(7 downto 2),
 			VGA_B     => vga_blue(7 downto 2),
-
+			VGA_BLANK => vga_blank,
 			--AUDIO
-			DAC_L   => dac_l,
-			DAC_R   => dac_r,
+				DAC_L   => dac_l,
+				DAC_R   => dac_r,
 			AUDIO_L => SIGMA_L,
 			AUDIO_R => SIGMA_R
 		);
 
+LED(7) <= vga_red(7);
+LED(6) <= vga_green(7);
+LED(5) <= vga_blue(7);
 
 		-- Pass internal signals to external SPI interface
 		sd_clk <= spi_clk_int;
 
 		controller : entity work.substitute_mcu
 			generic map(
-				sysclk_frequency => 500,
+				sysclk_frequency => 560,
 		--		SPI_FASTBIT=>3,			
 		--		SPI_INTERNALBIT=>2,		--needed to avoid hungs on the OSD
 				debug     => false,
 				jtag_uart => false
 			)
 			port map(
-				clk       => clock_50M,	
-				reset_in  => '1'   ,	--reset_in when 0
-				reset_out => reset_n,		   --reset_out when 0
+				clk       => CLK50M,	
+				reset_in  => '1',			--reset_in when 0
+				reset_out => reset_n,		--reset_out when 0
 
 				-- SPI signals
 				spi_miso      => sd_miso,
@@ -314,14 +564,14 @@ begin
 				ps2m_dat_out => ps2_mouse_dat_out,
 
 				-- Buttons
-				buttons => (1 => KEY0, others => '1'),
+				buttons => (0 => KEY0, others => '1'),
 
 				-- JOYSTICKS
 				joy1 => joya,
 
 				-- UART
-				rxd       => UART_RXD,
-				txd       => UART_TXD,
+				rxd       => rs232_rxd,
+				txd       => rs232_txd,
 				intercept => intercept
 			);
 

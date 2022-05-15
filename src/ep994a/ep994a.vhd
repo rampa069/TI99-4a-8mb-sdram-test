@@ -748,7 +748,7 @@ begin
 	-----------------------------------------------------------------------------
 	vdp18_b : work.vdp18_core
 	generic map (
-		is_pal_g      => is_pal_g,
+	
 		compat_rgb_g  => compat_rgb_g
 	)
 	port map (
@@ -771,9 +771,10 @@ begin
 		rgb_b_o       => rgb_b_o,
 		hsync_n_o     => hsync_n_o,
 		vsync_n_o     => vsync_n_o,
-		--blank_n_o     => blank_n_o,
-		--hblank_o      => hblank_o,
-		--vblank_o      => vblank_o,
+		blank_n_o     => blank_n_o,
+		hblank_o      => hblank_o,
+		vblank_o      => vblank_o,
+      is_pal_g      => false,
 		comp_sync_n_o => comp_sync_n_o
 	);
 

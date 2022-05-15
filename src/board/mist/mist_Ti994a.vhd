@@ -47,10 +47,11 @@ entity guest_mist is
     VGA_R,                                              -- Red[5:0]
     VGA_G,                                              -- Green[5:0]
     VGA_B : out std_logic_vector(5 downto 0);           -- Blue[5:0]
-    
+    VGA_BLANK:out std_logic; 
     -- Audio
     AUDIO_L,
     AUDIO_R : out std_logic;
+	 
 
     DAC_L,
     DAC_R : out std_logic_vector(15 downto 0);
@@ -346,6 +347,7 @@ begin
       rgb_b_o         => blue,
       hsync_n_o       => hs,
       vsync_n_o       => vs,
+		blank_n_o       => VGA_BLANK,
       audio_total_o   => unsigned_audio_s,
 
       speech_model    => "11", --not status(17 downto 16),

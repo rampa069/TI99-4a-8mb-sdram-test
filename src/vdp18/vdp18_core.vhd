@@ -72,11 +72,12 @@
 
 library ieee;
 use ieee.std_logic_1164.all;
+use work.vdp18_pack.all;
 
 entity vdp18_core is
 
   generic (
-    is_pal_g      : integer := 0;
+--    is_pal_g      : integer := 0;
     compat_rgb_g  : integer := 0
   );
   port (
@@ -103,17 +104,14 @@ entity vdp18_core is
     rgb_b_o       : out std_logic_vector(0 to 7);
     hsync_n_o     : out std_logic;
     vsync_n_o     : out std_logic;
-    comp_sync_n_o : out std_logic
+    blank_n_o     : out std_logic;
+    hblank_o      : out std_logic;
+    vblank_o      : out std_logic;
+    comp_sync_n_o : out std_logic;
+	is_pal_g		: in boolean
   );
 
 end vdp18_core;
-
-
-use work.vdp18_comp_pack.all;
-use work.vdp18_pack.opmode_t;
-use work.vdp18_pack.hv_t;
-use work.vdp18_pack.access_t;
-use work.vdp18_pack.to_boolean_f;
 
 architecture struct of vdp18_core is
 
@@ -121,7 +119,6 @@ architecture struct of vdp18_core is
 
   signal clk_en_10m7_s,
          clk_en_5m37_s,
-         clk_en_3m58_s,
          clk_en_acc_s     : boolean;
 
   signal opmode_s         : opmode_t;
@@ -133,6 +130,8 @@ architecture struct of vdp18_core is
   signal hsync_n_s,
          vsync_n_s        : std_logic;
   signal blank_s          : boolean;
+  signal hblank_s         : boolean;
+  signal vblank_s         : boolean;
 
   signal vert_inc_s       : boolean;
 
@@ -174,12 +173,11 @@ architecture struct of vdp18_core is
 
   signal irq_s            : boolean;
 
-  signal false_s          : boolean;
+  signal blank_n          : boolean;
+  signal hblank_n          : boolean;
+  signal vblank_n          : boolean;
 
 begin
-
-  -- temporary defaults
-  false_s       <= false;
 
   clk_en_10m7_s <= to_boolean_f(clk_en_10m7_i);
   rd_s          <= not to_boolean_f(csr_n_i);
@@ -191,13 +189,12 @@ begin
   -----------------------------------------------------------------------------
   -- Clock Generator
   -----------------------------------------------------------------------------
-  clk_gen_b : vdp18_clk_gen
+  clk_gen_b : work.vdp18_clk_gen
     port map (
       clk_i         => clk_i,
       clk_en_10m7_i => clk_en_10m7_i,
       reset_i       => reset_s,
       clk_en_5m37_o => clk_en_5m37_s,
-      clk_en_3m58_o => clk_en_3m58_s,
       clk_en_2m68_o => open
     );
 
@@ -205,10 +202,10 @@ begin
   -----------------------------------------------------------------------------
   -- Horizontal and Vertical Timing Generator
   -----------------------------------------------------------------------------
-  hor_vert_b : vdp18_hor_vert
-    generic map (
-      is_pal_g => is_pal_g
-    )
+  hor_vert_b : work.vdp18_hor_vert
+--    generic map (
+----      is_pal_g => is_pal_g
+--    )
     port map (
       clk_i         => clk_i,
       clk_en_5m37_i => clk_en_5m37_s,
@@ -219,7 +216,10 @@ begin
       vert_inc_o    => vert_inc_s,
       hsync_n_o     => hsync_n_s,
       vsync_n_o     => vsync_n_s,
-      blank_o       => blank_s
+      blank_o       => blank_s,
+      hblank_o      => hblank_s,
+      vblank_o      => vblank_s,
+      is_pal_g      => is_pal_g
     );
 
   hsync_n_o     <= hsync_n_s;
@@ -230,7 +230,7 @@ begin
   -----------------------------------------------------------------------------
   -- Control Module
   -----------------------------------------------------------------------------
-  ctrl_b : vdp18_ctrl
+  ctrl_b : work.vdp18_ctrl
     port map (
       clk_i         => clk_i,
       clk_en_5m37_i => clk_en_5m37_s,
@@ -253,7 +253,7 @@ begin
   -----------------------------------------------------------------------------
   -- CPU I/O Module
   -----------------------------------------------------------------------------
-  cpu_io_b : vdp18_cpuio
+  cpu_io_b : work.vdp18_cpuio
     port map (
       clk_i         => clk_i,
       clk_en_10m7_i => clk_en_10m7_s,
@@ -294,7 +294,7 @@ begin
   -----------------------------------------------------------------------------
   -- VRAM Address Multiplexer
   -----------------------------------------------------------------------------
-  addr_mux_b : vdp18_addr_mux
+  addr_mux_b : work.vdp18_addr_mux
     port map (
       access_type_i => access_type_s,
       opmode_i      => opmode_s,
@@ -318,7 +318,7 @@ begin
   -----------------------------------------------------------------------------
   -- Pattern Generator
   -----------------------------------------------------------------------------
-  pattern_b : vdp18_pattern
+  pattern_b : work.vdp18_pattern
     port map (
       clk_i         => clk_i,
       clk_en_5m37_i => clk_en_5m37_s,
@@ -341,7 +341,7 @@ begin
   -----------------------------------------------------------------------------
   -- Sprite Generator
   -----------------------------------------------------------------------------
-  sprite_b : vdp18_sprite
+  sprite_b : work.vdp18_sprite
     port map (
       clk_i         => clk_i,
       clk_en_5m37_i => clk_en_5m37_s,
@@ -371,7 +371,7 @@ begin
   -----------------------------------------------------------------------------
   -- Color Multiplexer
   -----------------------------------------------------------------------------
-  col_mux_b : vdp18_col_mux
+  col_mux_b : work.vdp18_col_mux
     generic map (
       compat_rgb_g  => compat_rgb_g
     )
@@ -382,6 +382,8 @@ begin
       vert_active_i => vert_active_s,
       hor_active_i  => hor_active_s,
       blank_i       => blank_s,
+      hblank_i      => hblank_s,
+      vblank_i      => vblank_s,
       reg_col0_i    => reg_col0_s,
       pat_col_i     => pat_col_s,
       spr0_col_i    => spr0_col_s,
@@ -389,9 +391,16 @@ begin
       spr2_col_i    => spr2_col_s,
       spr3_col_i    => spr3_col_s,
       col_o         => col_o,
+		blank_n_o     => blank_n,
+		hblank_n_o    => hblank_n,
+		vblank_n_o    => vblank_n,
       rgb_r_o       => rgb_r_o,
       rgb_g_o       => rgb_g_o,
       rgb_b_o       => rgb_b_o
     );
+	 
+	 blank_n_o <= '1' when blank_n  else '0';
+	 hblank_o  <= '0' when hblank_n else '1';
+	 vblank_o  <= '0' when vblank_n else '1';
 
 end struct;
