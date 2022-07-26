@@ -75,10 +75,16 @@ cmd issued  registered
  5          data0 returned
 */
 
+//localparam STATE_RAS0      = 3'd0;   // first state in cycle
+//localparam STATE_CAS0      = STATE_RAS0 + RASCAS_DELAY; // CAS phase - 3
+//localparam STATE_READ0     = STATE_CAS0 + CAS_LATENCY + 1'd1; // 5
+//localparam STATE_LAST      = STATE_READ0;
+
 localparam STATE_RAS0      = 3'd0;   // first state in cycle
+localparam STATE_RAS1      = 3'd3;   // Second ACTIVE command after RAS0 + tRRD (15ns)
 localparam STATE_CAS0      = STATE_RAS0 + RASCAS_DELAY; // CAS phase - 3
-localparam STATE_READ0     = STATE_CAS0 + CAS_LATENCY + 1'd1; // 5
-localparam STATE_LAST      = STATE_READ0;
+localparam STATE_READ0     = STATE_CAS0 + CAS_LATENCY + 2'd2; // 6
+localparam STATE_LAST      = 3'd7;
 
 reg [2:0] t;
 
