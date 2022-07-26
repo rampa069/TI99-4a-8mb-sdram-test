@@ -885,22 +885,22 @@ begin
 		turbo => turbo_i
 	);
 
-	speech : work.tispeechsyn
-	PORT MAP (
-		clk_i => clk,
-		reset_n_i => not cpu_reset,
-		addr_i => cpu_addr,
-		data_o => speech_data_out,
-		data_i => data_from_cpu(15 downto 8),
-		MEM_n_i => MEM_n,
-		dbin_i => cpu_rd,
-		ready_o => open, --could use this
-		aout_o => speech_o,
-		sr_re_o => sr_re_o,
-		sr_addr_o => sr_addr_o,
-		sr_data_i => sr_data_i,
-		model => speech_model
-	);
+--	speech : work.tispeechsyn
+--	PORT MAP (
+--		clk_i => clk,
+--		reset_n_i => not cpu_reset,
+--		addr_i => cpu_addr,
+--		data_o => speech_data_out,
+--		data_i => data_from_cpu(15 downto 8),
+--		MEM_n_i => MEM_n,
+--		dbin_i => cpu_rd,
+--		ready_o => open, --could use this
+--		aout_o => speech_o,
+--		sr_re_o => sr_re_o,
+--		sr_addr_o => sr_addr_o,
+--		sr_data_i => sr_data_i,
+--		model => speech_model
+--	);
 
 	speech_conv <= unsigned(resize(speech_o,speech_conv'length)) + to_unsigned(128,11) when speech_i = '1' else to_unsigned(0,speech_conv'length);
 	audio_total_o <= audio_o  + speech_conv;
