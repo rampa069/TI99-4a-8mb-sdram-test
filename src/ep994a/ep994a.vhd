@@ -65,6 +65,11 @@ entity ep994a is
     -- Global Interface -------------------------------------------------------
     clk_i           : in  std_logic;
     clk_en_10m7_i   : in  std_logic;
+	 clk_25m0_i      : in std_logic;
+	 clk_100m0_i     : in std_logic;
+    sprite_max_i    : in  std_logic;
+	 scan_lines_i    : in std_logic;
+	 
     reset_n_i       : in  std_logic;
     por_n_o         : out std_logic;
     -- Controller Interface ---------------------------------------------------
@@ -80,11 +85,7 @@ entity ep994a is
     cpu_ram_be_n_o  : out std_logic_vector( 1 downto 0);
     cpu_ram_d_i     : in  std_logic_vector(15 downto 0);
     cpu_ram_d_o     : out std_logic_vector(15 downto 0);
-    -- Video RAM Interface ----------------------------------------------------
-    vram_a_o        : out std_logic_vector(13 downto 0);
-    vram_we_o       : out std_logic;
-    vram_d_o        : out std_logic_vector( 7 downto 0);
-    vram_d_i        : in  std_logic_vector( 7 downto 0);
+
     -- RGB Video Interface ----------------------------------------------------
     col_o           : out std_logic_vector( 3 downto 0);
     rgb_r_o         : out std_logic_vector( 7 downto 0);
@@ -111,7 +112,7 @@ entity ep994a is
     sd_dout_strobe  : in  std_logic;
 
     -- Audio Interface --------------------------------------------------------
-    audio_total_o   : out std_logic_vector(10 downto 0);
+    audio_total_o   : out unsigned(13 downto 0);
     -- DEBUG (PS2 KBD port)
     --DEBUG1        : out std_logic;
     --DEBUG2        : out std_logic;
@@ -214,6 +215,9 @@ architecture Behavioral of ep994a is
 	signal vdp_rd 				: std_logic;
 	signal vdp_data_out		: std_logic_vector(15 downto 0);
 	signal vdp_interrupt		: std_logic; --low true
+	signal red_s            : std_logic_vector( 3 downto 0);
+   signal grn_s            : std_logic_vector( 3 downto 0);
+   signal blu_s            : std_logic_vector( 3 downto 0);
 
 	-- GROM signals
 	signal grom_data_out		: std_logic_vector(7 downto 0);
@@ -245,7 +249,7 @@ architecture Behavioral of ep994a is
 	signal psg_ready_s      : std_logic;
 	signal tms9919_we		: std_logic;		-- write enable pulse for the audio "chip"
 	signal audio_data_out: std_logic_vector(7 downto 0);
-	signal audio_o      : std_logic_vector( 7 downto 0);
+	signal audio_o      : unsigned( 13 downto 0);
 
 	-- disk subsystem
 	signal cru1100_regs  : std_logic_vector(7 downto 0); -- disk controller CRU select
@@ -728,7 +732,7 @@ begin
 	vdp_data_out(7 downto 0) <= x"00";
 	data_to_cpu <= 
 		vdp_data_out         			when sams_regs(6)='0' and cpu_addr(15 downto 10) = "100010" else	-- 10001000..10001011 (8800..8BFF)
-		--speech_data_out & x"00"       when sams_regs(6)='0' and cpu_addr(15 downto 10) = "100100" and speech_i='1' else	-- speech address read (9000..93FF)
+		speech_data_out & x"00"       when sams_regs(6)='0' and cpu_addr(15 downto 10) = "100100" and speech_i='1' else	-- speech address read (9000..93FF)
 		x"6000"                       when sams_regs(6)='0' and cpu_addr(15 downto 10) = "100100" and speech_i='0' else	-- speech address read (9000..93FF)
 		grom_data_out & x"00" 			when sams_regs(6)='0' and cpu_addr(15 downto 8) = x"98" and cpu_addr(1)='1' else	-- GROM address read
 		pager_data_out(7 downto 0) & pager_data_out(7 downto 0) when paging_registers = '1' else	-- replicate pager values on both hi and lo bytes
@@ -743,39 +747,47 @@ begin
 		not disk_dout&not disk_dout when disk_cs = '1' else
 		sram_16bit_read_bus(15 downto 0);		-- data to CPU
 
-	-----------------------------------------------------------------------------
-	-- TMS9928A Video Display Processor
-	-----------------------------------------------------------------------------
-	vdp18_b : work.vdp18_core
-	generic map (
-		is_pal_g      => is_pal_g,
-		compat_rgb_g  => compat_rgb_g
-	)
-	port map (
-		clk_i         => clk_i,
-		clk_en_10m7_i => clk_en_10m7_i,
-		reset_n_i     => real_reset,--
-		csr_n_i       => not vdp_rd,--
-		csw_n_i       => not vdp_wr,--
-		mode_i        => cpu_addr(1),
-		int_n_o       => vdp_interrupt,--
-		cd_i          => data_from_cpu(15 downto 8),--
-		cd_o          => vdp_data_out(15 downto 8),--
-		vram_we_o     => vram_we_o,
-		vram_a_o      => vram_a_o,
-		vram_d_o      => vram_d_o,
-		vram_d_i      => vram_d_i,
-		col_o         => col_o,
-		rgb_r_o       => rgb_r_o,
-		rgb_g_o       => rgb_g_o,
-		rgb_b_o       => rgb_b_o,
-		hsync_n_o     => hsync_n_o,
-		vsync_n_o     => vsync_n_o,
-		--blank_n_o     => blank_n_o,
-		--hblank_o      => hblank_o,
-		--vblank_o      => vblank_o,
-		comp_sync_n_o => comp_sync_n_o
-	);
+
+   -- F18A VDP
+   --
+   -- The soft button reset is sent to the F18A (unlike the real CV) to ensure
+   -- a game will not leave enhanced F18A settings enabled which will cause
+   -- problems for legacy or non-F18A games.
+   --
+   inst_f18a : entity work.f18a_core
+   port map
+   (
+    clk_100m0_i    => clk_100m0_i,  -- must be 100MHz
+    clk_25m0_i     => clk_25m0_i,   -- must be an actual 25MHz clock, NOT an enable
+   -- 9918A to Host interface
+    reset_n_i      => real_reset,    -- active low, the F18A gets soft reset
+    mode_i         => cpu_addr(1),
+    csw_n_i        => not vdp_wr,
+    csr_n_i        => not vdp_rd,
+    int_n_o        => vdp_interrupt,
+    cd_i           => data_from_cpu(15 downto 8),
+    cd_o           => vdp_data_out(15 downto 8),
+   -- Video Output
+    blank_o        => blank_n_o,      -- active high during active video
+    hsync_o        => hsync_n_o,
+    vsync_o        => vsync_n_o,
+    red_o          => red_s,        -- 4-bit red
+    grn_o          => grn_s,        -- 4-bit green
+    blu_o          => blu_s,        -- 4-bit blue
+   -- Feature Selection
+    sprite_max_i   => sprite_max_i, -- default sprite max, '0'=32, '1'=4
+    scanlines_i    => scan_lines_i, -- simulated scan lines, '0'=no, '1'=yes
+   -- SPI for GPU access, not enabled in the Phoenix
+    spi_clk_o      => open,
+    spi_cs_o       => open,
+    spi_mosi_o     => open,
+    spi_miso_i     => '0'
+   );
+
+   rgb_r_o <= red_s & "0000";
+   rgb_g_o <= grn_s & "0000";
+   rgb_b_o <= blu_s & "0000";
+
 
 	-- GROM implementation - GROM's are mapped to external RAM
 	extbasgrom : entity work.gromext port map (
@@ -790,23 +802,24 @@ begin
 		addr 		=> grom_ram_addr
 	);
 
-	-----------------------------------------------------------------------------
-	-- SN76489 Programmable Sound Generator
-	-----------------------------------------------------------------------------
-	psg_b : work.sn76489_top
-	generic map (
-		clock_div_16_g => 1
-	)
-	port map (
-		clock_i    => clk_i,
-		clock_en_i => clk_en_3m58_s,
-		res_n_i    => real_reset,--
-		ce_n_i     => not tms9919_we,--
-		we_n_i     => not tms9919_we,--
-		ready_o    => psg_ready_s,--
-		d_i        => audio_data_out,--
-		aout_o     => audio_o
-	);
+
+  -----------------------------------------------------------------------------
+  -- SN76489 Programmable Sound Generator
+  -----------------------------------------------------------------------------
+  psg_b : work.sn76489_audio
+    generic map (
+      FAST_IO_G          => '0',
+      MIN_PERIOD_CNT_G   => 17
+    )
+    port map (
+      clk_i        => clk_i,
+      en_clk_psg_i => clk_en_3m58_s,
+      ce_n_i       => not tms9919_we,
+      wr_n_i       => not tms9919_we,
+      ready_o      => psg_ready_s,
+      data_i       => audio_data_out,
+      mix_audio_o  => audio_o
+    );
 
 	-- memory paging unit implementation
 	paging_regs_visible 	<= sams_regs(0);			-- 1E00 in CRU space
@@ -872,25 +885,25 @@ begin
 		turbo => turbo_i
 	);
 
---	speech : work.tispeechsyn
---	PORT MAP (
---		clk_i => clk,
---		reset_n_i => not cpu_reset,
---		addr_i => cpu_addr,
---		data_o => speech_data_out,
---		data_i => data_from_cpu(15 downto 8),
---		MEM_n_i => MEM_n,
---		dbin_i => cpu_rd,
---		ready_o => open, --could use this
---		aout_o => speech_o,
---		sr_re_o => sr_re_o,
---		sr_addr_o => sr_addr_o,
---		sr_data_i => sr_data_i,
---		model => speech_model
---	);
---
---	speech_conv <= unsigned(resize(speech_o,speech_conv'length)) + to_unsigned(128,11) when speech_i = '1' else to_unsigned(0,speech_conv'length);
-	audio_total_o <= std_logic_vector(unsigned("0" & audio_o & "00"));-- + speech_conv);
+	speech : work.tispeechsyn
+	PORT MAP (
+		clk_i => clk,
+		reset_n_i => not cpu_reset,
+		addr_i => cpu_addr,
+		data_o => speech_data_out,
+		data_i => data_from_cpu(15 downto 8),
+		MEM_n_i => MEM_n,
+		dbin_i => cpu_rd,
+		ready_o => open, --could use this
+		aout_o => speech_o,
+		sr_re_o => sr_re_o,
+		sr_addr_o => sr_addr_o,
+		sr_data_i => sr_data_i,
+		model => speech_model
+	);
+
+	speech_conv <= unsigned(resize(speech_o,speech_conv'length)) + to_unsigned(128,11) when speech_i = '1' else to_unsigned(0,speech_conv'length);
+	audio_total_o <= audio_o  + speech_conv;
 
 	-----------------------------------------------------------------------------
 	-- Disk subsystem (PHP1240)

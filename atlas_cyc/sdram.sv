@@ -181,7 +181,7 @@ always @(posedge clk) begin
 
 			if (port1_active) begin
 				sd_cmd <= CMD_ACTIVE;
-				SDRAM_A <= port1_a[19:8];
+				SDRAM_A <= port1_a[19:9];
 				SDRAM_BA <= port1_a[21:20];
 				addr_latch <= port1_a;
 				{ oe_latch, we_latch } <= { ~port1_we, port1_we };

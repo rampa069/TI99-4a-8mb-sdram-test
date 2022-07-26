@@ -62,8 +62,10 @@ end entity;
 architecture RTL of atlas_top is
 
 	-- System clocks
-	signal locked  : std_logic;
-	signal reset_n : std_logic;
+	signal locked     : std_logic;
+	signal reset_n    : std_logic;
+	signal clock_25m  : std_logic;
+	signal clock_100m : std_logic;
 
 	-- SPI signals
 	signal sd_clk  : std_logic;
@@ -155,6 +157,8 @@ architecture RTL of atlas_top is
 	--  areset : in std_logic;
 	    inclk0 : in std_logic;
 	    c0 : out std_logic;
+		 C1 : out std_logic;
+		 c2 : out std_logic;
 	    locked : out std_logic
 	  );
 	end component;
@@ -225,13 +229,17 @@ begin
 	port map (
 		inclk0		=> CLK12M,				
 		c0			=> clock_50M,			-- 50 MHz
+		c1       => clock_100m,
+		c2       => clock_25m,
 		locked		=> locked
 	);
 
 
 	guest : component guest_mist
 		port map(
-			CLOCK_27 => CLK12M,
+			CLOCK_27   => CLK12M,
+			CLOCK_25M  => CLOCK_25M,
+			CLOCK_100M => CLOCK_100M,
 --			RESET_N => reset_n,
 			LED => LED(0),
 			--SDRAM

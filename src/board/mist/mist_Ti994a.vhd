@@ -7,7 +7,6 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 use work.mist.all;
-use work.vdp18_col_pack.all;
 use work.build_id.all;
 
 entity guest_mist is
@@ -16,6 +15,8 @@ entity guest_mist is
     -- Clocks
     
     CLOCK_27    : in std_logic; -- 27 MHz
+	 CLOCK_25M   : in std_logic;
+	 CLOCK_100M  : in std_logic;
 
 
     -- SDRAM
@@ -78,9 +79,10 @@ architecture rtl of guest_mist is
 --                                "OD,Cart Type,Normal,MBX;"&
                                 "OE,Scratchpad RAM,256B,1KB;"&
                                 "OA,Turbo,Off,On;"&
---                                "OGH,Speech,Off,5220,5200;"&
+                                "OGH,Speech,Off,5220,5200;"&
                                 "O6,Joystick swap,Off,On;"&
-                                "O23,Scanlines,Off,25%,50%,75%;"&
+										  "O2,F18A Max Sprites,4,32;"&
+                                "O3,F18A Scanlines,Off,On;"&
                                 "O5,Blend,Off,On;"&
                                 "T0,Reset;"&
                                 "V,v"&BUILD_DATE;
@@ -232,7 +234,7 @@ architecture rtl of guest_mist is
   signal speech_rom_a_s      : std_logic_vector(14 downto 0);
   signal speech_rom_d_s      : std_logic_vector( 7 downto 0);
 
-  signal unsigned_audio_s    : std_logic_vector(10 downto 0);
+  signal unsigned_audio_s    : unsigned(13 downto 0);
   signal audio_s             : std_logic;
 
   signal kbd_i_s             : std_logic_vector( 8 downto 0);
@@ -322,7 +324,11 @@ begin
     )
     port map (
       clk_i           => clk_sys_s,
+		clk_25m0_i      => CLOCK_25M,
+		clk_100m0_i     => CLOCK_100M,
       clk_en_10m7_i   => clk_en_10m7_q,
+      sprite_max_i    => not status(2),
+      scan_lines_i    => status(3),
       reset_n_i       => reset_n_s,
       por_n_o         => por_n_s,
 
@@ -336,10 +342,10 @@ begin
       cpu_ram_d_i     => cpu_ram_d_to_ti_s,
       cpu_ram_d_o     => cpu_ram_d_from_ti_s,
 
-      vram_a_o        => vram_a_s,
-      vram_we_o       => vram_we_s,
-      vram_d_o        => vram_d_from_cv_s,
-      vram_d_i        => vram_d_to_cv_s,
+--      vram_a_o        => vram_a_s,
+--      vram_we_o       => vram_we_s,
+--      vram_d_o        => vram_d_from_cv_s,
+--      vram_d_i        => vram_d_to_cv_s,
 
       rgb_r_o         => red,
       rgb_g_o         => green,
@@ -348,7 +354,7 @@ begin
       vsync_n_o       => vs,
       audio_total_o   => unsigned_audio_s,
 
-      speech_model    => "11", --not status(17 downto 16),
+      speech_model    => not status(17 downto 16),
       sr_re_o         => open,
       sr_addr_o       => speech_rom_a_s,
       sr_data_i       => speech_rom_d_s,
@@ -388,34 +394,34 @@ begin
   -----------------------------------------------------------------------------
   -- SPEECH ROM
   -----------------------------------------------------------------------------
---  speech_rom : entity work.sprom
---    generic map
---    (
---      widthad_a   => 15,
---      init_file   => "../roms/hex/spchrom.hex"
---    )
---    port map
---    (
---      clock       => clk_sys_s,
---      address     => speech_rom_a_s,
---      q           => speech_rom_d_s
---    );
+  speech_rom : entity work.sprom
+    generic map
+    (
+      widthad_a   => 15,
+      init_file   => "../roms/hex/spchrom.hex"
+    )
+    port map
+    (
+      clock       => clk_sys_s,
+      address     => speech_rom_a_s,
+      q           => speech_rom_d_s
+    );
 
   -----------------------------------------------------------------------------
   -- VRAM
   -----------------------------------------------------------------------------
   
-  vram_b : entity work.spram
-    generic map (
-      widthad_a      => 14
-    )
-    port map (
-      wren      => vram_we_s,
-      address   => vram_a_s,
-      clock     => clk_sys_s,
-      data      => vram_d_from_cv_s,
-      q         => vram_d_to_cv_s
-    );
+--  vram_b : entity work.spram
+--    generic map (
+--      widthad_a      => 14
+--    )
+--    port map (
+--      wren      => vram_we_s,
+--      address   => vram_a_s,
+--      clock     => clk_sys_s,
+--      data      => vram_d_from_cv_s,
+--      q         => vram_d_to_cv_s
+--    );
 
   -----------------------------------------------------------------------------
   -- Video output
@@ -429,14 +435,14 @@ begin
       OSD_X_OFFSET => "00"&x"10"
     )
     port map (
-      clk_sys     => clk_sys_s,
-      scanlines   => status(3 downto 2),
-      scandoubler_disable => scandoubler_disable,
+      clk_sys     => CLOCK_100M, --clk_sys_s,
+      scanlines   => "00",
+      scandoubler_disable => '1', -- scandoubler_disable,
       ypbpr       => ypbpr,
-      no_csync    => no_csync,
+      no_csync    => '0',
       rotate      => "00",
       blend       => status(5),
-      ce_divider  => '1',
+      ce_divider  => '0',
 
       SPI_SCK     => SPI_SCK,
       SPI_SS3     => SPI_SS3,
@@ -458,7 +464,7 @@ begin
   -----------------------------------------------------------------------------
 
   dac : entity work.dac
-    generic map (11)
+    generic map (14)
     port map (
       clk_i     => clk_sys_s,
       res_n_i   => reset_n_s,
@@ -466,8 +472,8 @@ begin
       dac_o     => audio_s
     ); 
 
-  DAC_L <= unsigned_audio_s & "00000";	 
-  DAC_R <= unsigned_audio_s & "00000";	 
+  DAC_L <= std_logic_vector(unsigned_audio_s) & "00";	 
+  DAC_R <= std_logic_vector(unsigned_audio_s) & "00";	 
     
 -- MiST interfaces
 

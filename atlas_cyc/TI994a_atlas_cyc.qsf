@@ -97,8 +97,8 @@ set_location_assignment PIN_J1 -to TMDS[4]
 set_location_assignment PIN_J2 -to TMDS[5]
 set_location_assignment PIN_N1 -to TMDS[6]
 set_location_assignment PIN_N2 -to TMDS[7]
-set_location_assignment PIN_K2 -to PS2_KEYBOARD_1
-set_location_assignment PIN_L2 -to PS2_KEYBOARD_2
+set_location_assignment PIN_K2 -to PS2_KEYBOARD_DAT
+set_location_assignment PIN_L2 -to PS2_KEYBOARD_CLK
 set_location_assignment PIN_L1 -to PDP_4k7
 set_location_assignment PIN_K1 -to PDM_4k7
 set_location_assignment PIN_C16 -to PS2_MOUSE_CLK

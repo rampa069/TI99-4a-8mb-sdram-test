@@ -76,6 +76,8 @@ entity mist_cv is
     -- Clocks
     
     CLOCK_27    : in std_logic_vector(1 downto 0); -- 27 MHz
+	 CLOCK_25M   : in std_logic;
+	 CLOCK_100M  : in std_logic;
 
 
     -- SDRAM
@@ -261,10 +263,10 @@ architecture rtl of mist_cv is
          cpu_ram_d_from_cv_s : std_logic_vector( 7 downto 0);
   signal cpu_ram_we_s        : std_logic;
 
-  signal vram_a_s            : std_logic_vector(13 downto 0);
-  signal vram_we_s           : std_logic;
-  signal vram_d_to_cv_s,
-         vram_d_from_cv_s    : std_logic_vector( 7 downto 0);
+--  signal vram_a_s            : std_logic_vector(13 downto 0);
+--  signal vram_we_s           : std_logic;
+--  signal vram_d_to_cv_s,
+--         vram_d_from_cv_s    : std_logic_vector( 7 downto 0);
 
   signal cart_a_s            : std_logic_vector(24 downto 0);
   signal cart_d_s            : std_logic_vector( 7 downto 0);
@@ -384,6 +386,8 @@ begin
     )
     port map (
       clk_i           => clk_21m3_s,
+		clk_100m0       => CLOCK_100M,
+		clk_25m0        => CLOCK_25M,
       clk_en_10m7_i   => clk_en_10m7_q,
       reset_n_i       => reset_n_s,
       sg1000          => sg1000,
@@ -411,10 +415,10 @@ begin
       cpu_ram_we_n_o  => cpu_ram_we_n_s,
       cpu_ram_d_i     => cpu_ram_d_to_cv_s,
       cpu_ram_d_o     => cpu_ram_d_from_cv_s,
-      vram_a_o        => vram_a_s,
-      vram_we_o       => vram_we_s,
-      vram_d_o        => vram_d_from_cv_s,
-      vram_d_i        => vram_d_to_cv_s,
+--      vram_a_o        => vram_a_s,
+--      vram_we_o       => vram_we_s,
+--      vram_d_o        => vram_d_from_cv_s,
+--      vram_d_i        => vram_d_to_cv_s,
       cart_a_o        => cart_a_s(19 downto 0),
       cart_pages_i    => romwr_a(19 downto 14),
       cart_en_80_n_o  => cart_en_80_n_s,

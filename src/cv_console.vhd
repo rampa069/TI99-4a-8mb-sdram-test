@@ -99,10 +99,10 @@ entity cv_console is
     cpu_ram_d_i     : in  std_logic_vector( 7 downto 0);
     cpu_ram_d_o     : out std_logic_vector( 7 downto 0);
     -- Video RAM Interface ----------------------------------------------------
-    vram_a_o        : out std_logic_vector(13 downto 0);
-    vram_we_o       : out std_logic;
-    vram_d_o        : out std_logic_vector( 7 downto 0);
-    vram_d_i        : in  std_logic_vector( 7 downto 0);
+--    vram_a_o        : out std_logic_vector(13 downto 0);
+--    vram_we_o       : out std_logic;
+--    vram_d_o        : out std_logic_vector( 7 downto 0);
+--    vram_d_i        : in  std_logic_vector( 7 downto 0);
     -- Cartridge ROM Interface ------------------------------------------------
     cart_a_o        : out std_logic_vector(19 downto 0);
     cart_pages_i    : in  std_logic_vector(5 downto 0);
