@@ -58,7 +58,9 @@ localparam NO_WRITE_BURST = 1'b1;   // 0= write burst enabled, 1=only single acc
 
 localparam MODE = { 2'b00, NO_WRITE_BURST, OP_MODE, CAS_LATENCY, ACCESS_TYPE, BURST_LENGTH}; 
 // 64ms/8192 rows = 7.8us
-localparam RFRSH_CYCLES = 16'd78*MHZ/4'd10;
+// 64ms/4096 rows = 15.6us
+
+localparam RFRSH_CYCLES = 16'd156*MHZ/4'd10;
 // ---------------------------------------------------------------------
 // ------------------------ cycle state machine ------------------------
 // ---------------------------------------------------------------------
